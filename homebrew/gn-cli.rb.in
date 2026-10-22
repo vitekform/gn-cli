@@ -1,0 +1,55 @@
+# Template for the Homebrew formula in the tap (github.com/vitekform/homebrew-tap,
+# Formula/gn-cli.rb). The homebrew job in .github/workflows/gn-cli.yml fills in
+# @VERSION@ and the @SHA256_*@ placeholders from the published rsys release and
+# pushes the result, with LICENSE from this folder, to the tap on every
+# gn-cli-v* tag; don't edit the tap's copies.
+#
+# It installs the prebuilt binaries from rsys.ganamaga.me rather than building
+# from source. Source code: https://github.com/vitekform/gn-cli.
+class GnCli < Formula
+  desc "Command-line client for the nextgen API"
+  # Source, issues and build instructions live in the standalone repository.
+  homepage "https://github.com/vitekform/gn-cli"
+  version "@VERSION@"
+  # MIT with an additional User-Agent condition; not the unmodified SPDX MIT licence.
+  license :cannot_represent
+
+  on_macos do
+    # CI only builds an Apple Silicon binary.
+    depends_on arch: :arm64
+
+    url "https://rsys.ganamaga.me/gn-cli/public/v/@VERSION@/gn-cli-macos-arm64"
+    sha256 "@SHA256_MACOS_ARM64@"
+  end
+
+  on_linux do
+    # The Linux binary links the system libcurl (libcurl4) dynamically.
+    depends_on arch: :x86_64
+
+    url "https://rsys.ganamaga.me/gn-cli/public/v/@VERSION@/gn-cli-linux-x64"
+    sha256 "@SHA256_LINUX_X64@"
+  end
+
+  def install
+    bin.install Dir["gn-cli-*"].first => "gn-cli"
+    # The download has no executable bit, and the completions below run the binary.
+    chmod 0755, bin/"gn-cli"
+    bin.install_symlink "gn-cli" => "gn"
+    bin.install_symlink "gn-cli" => "gncli"
+    generate_completions_from_executable(bin/"gn-cli", "completion", shells: [:bash, :zsh, :fish])
+  end
+
+  test do
+    # brew test runs in a clean environment; without this every command that isn't
+    # --version/license/completion stops at the Terms of Service gate.
+    ENV["GN_ACCEPT_TERMS"] = "1"
+    assert_match version.to_s, shell_output("#{bin}/gn-cli --version")
+    assert_match version.to_s, shell_output("#{bin}/gn --version")
+    assert_match "Additional User-Agent condition", shell_output("#{bin}/gn-cli license")
+    assert_match "nlohmann/json", shell_output("#{bin}/gn-cli license third-party")
+    assert_match "share", shell_output("#{bin}/gn-cli __complete s3 -- sh")
+    (testpath/"abc.txt").write "abc"
+    assert_match "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+                 shell_output("#{bin}/gn-cli --no-unicode rsys hash #{testpath}/abc.txt")
+  end
+end

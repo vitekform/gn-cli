@@ -1,0 +1,37 @@
+# Copy into .github/workflows/ in the project whose artifacts are being published.
+# Configure RSYS_TOKEN (rsys:read + rsys:publish, release_system permission).
+# The runner needs gn-cli >= 1.11.0 and the project's own build toolchain.
+name: Publish compatible builds
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version (independent of Minecraft version)
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: rsys-plugin-${{ inputs.version }}
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      # Replace this with the project's build and toolchain setup, producing both JARs.
+      - name: Build artifacts
+        run: ./gradlew build
+      - name: Publish to RSYS
+        env:
+          GN_TOKEN: ${{ secrets.RSYS_TOKEN }}
+          GN_ACCEPT_TERMS: '1'
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          gn-cli rsys publish my-plugin "$RELEASE_VERSION" \
+            build/libs/paper.jar build/libs/spigot.jar \
+            --variants-file rsys-variants.json --append --noninteractive
+# Commit a manifest based on rsys-variants.json next to this project's build files.
+# Re-running a version skips finished files with matching SHA-256. Different bytes need
+# a new version; force-replacing a published default is rejected by the server.

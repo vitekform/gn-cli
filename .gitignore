@@ -1,0 +1,13 @@
+build/
+dist/
+CMakeUserPresets.json
+compile_commands.json
+__pycache__/
+*.py[cod]
+.env
+.env.*
+credentials.json
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

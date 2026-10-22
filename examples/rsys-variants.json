@@ -1,0 +1,16 @@
+{
+  "variants": [
+    {
+      "key": "paper-1.21.1",
+      "selection": { "platform": "paper", "minecraft_version": "1.21.1" },
+      "files": ["paper.jar"],
+      "defaultFile": "paper.jar"
+    },
+    {
+      "key": "spigot-1.21.2",
+      "selection": { "platform": "spigot", "minecraft_version": "1.21.2" },
+      "files": ["spigot.jar"],
+      "defaultFile": "spigot.jar"
+    }
+  ]
+}

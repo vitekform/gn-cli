@@ -1,0 +1,484 @@
+# =============================================================================
+# gn-cli.yml — build the gn-cli command-line client for Linux, macOS
+# and Windows.
+#
+# Runs on GitHub-hosted runners: the CLI needs neither the loopback registry
+# nor the production .env, so it has no business queueing on gn_wkst. Pull
+# requests only build and smoke-test; they publish nothing and receive no publishing credentials.
+#
+# macOS runners bill at 10x the Linux rate, so the macOS build only runs when
+# the commit message contains [macos] (case-insensitive; for pull requests the
+# PR head commit is checked), when a gn-cli-v* tag is pushed (a release must
+# ship all three binaries), or when workflow_dispatch is run with macos: true
+# (or with publish: true from a gn-cli-v* tag).
+#
+# Binaries go to the release system (rsys.ganamaga.me, project gn-cli), not to
+# workflow artifacts:
+#   gn-cli-v<version> tag   release <version> (e.g. gn-cli-v1.0.2 → 1.0.2),
+#                           plus a GitHub release with the same binaries and
+#                           its generated notes as the rsys changelog
+#   push to master/main     prerelease <version>-dev.<run number> (e.g.
+#                           1.0.2-dev.57, <version> being CMakeLists.txt's)
+#   workflow_dispatch with  the same as a push of the ref it runs on: from a
+#   publish: true           gn-cli-v* tag the release, from any branch a
+#                           <version>-dev.<run number> prerelease
+# A manual run without publish only builds, like a pull request.
+# `latest` stays the tagged release; `latest?prerelease=true` — what the APK
+# job in build-deploy.yml fetches — is the newest build.
+#
+# Each build leg uploads its own binary, with the gn-cli it just built, into a
+# draft of that release; the publish job then makes it live in one step, so
+# nobody ever sees a release with only some of the platforms. A leg that fails
+# leaves the draft unpublished.
+#
+# That needs the repository secret RSYS_TOKEN: a CLI token with rsys:read and
+# rsys:publish, from an account with the release_system permission
+#   gn-cli token create ci-rsys -s rsys:read,rsys:publish --expires 1y
+# and the project created once:
+#   gn-cli rsys new-project gn-cli --name gn-cli --public
+# Without the secret the builds say so and nothing is published.
+#
+# The tag is normally made by gn-cli-tag.yml when VERSION in CMakeLists.txt
+# changes on master; it starts this workflow by workflow_dispatch with publish: true.
+#
+# A stable gn-cli-v* tag then also updates the Homebrew tap vitekform/homebrew-tap
+# (the homebrew job; needs the secret HOMEBREW_TAP_DEPLOY_KEY_B64, see there).
+#
+# Dependencies per platform:
+#   Linux    system libcurl (OpenSSL) and nlohmann-json from apt. The binary
+#            links libcurl dynamically, so the target needs libcurl4 installed
+#            (it is on any desktop Ubuntu/Debian).
+#   macOS    the libcurl in the SDK; nlohmann-json is fetched by CMake.
+#   Windows  curl (Schannel, so no OpenSSL) and nlohmann-json from the
+#            runner's vcpkg, linked statically: one self-contained .exe.
+# =============================================================================
+
+name: gn-cli
+
+on:
+  push:
+    branches: [master, main]
+    tags: ['gn-cli-v*']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      macos:
+        description: Also build the macOS binary
+        type: boolean
+        default: false
+      publish:
+        description: Also publish the binaries to rsys.ganamaga.me (a prerelease, or the release when run from a gn-cli-v* tag)
+        type: boolean
+        default: false
+
+concurrency:
+  group: gn-cli-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # CI is the owner, publishing their own releases: gn-cli would otherwise refuse every command
+  # until the Terms of Service and licence are accepted, and can't ask here. The smoke test
+  # unsets it to check that refusal.
+  GN_ACCEPT_TERMS: "1"
+
+jobs:
+  # Decides whether the macOS leg joins the matrix. A job-level `if` can't see
+  # `matrix`, and a step-level one would still pay for booting the macOS VM.
+  plan:
+    name: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      publish: ${{ steps.release.outputs.publish }}
+      version: ${{ steps.release.outputs.version }}
+      prerelease: ${{ steps.release.outputs.prerelease }}
+    steps:
+      # Pull request payloads don't carry the head commit message; pushes need
+      # CMakeLists.txt for the dev version.
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          sparse-checkout: CMakeLists.txt
+          sparse-checkout-cone-mode: false
+
+      - name: plan
+        id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          PUSH_MESSAGE: ${{ github.event.head_commit.message }}
+          DISPATCH_MACOS: ${{ inputs.macos }}
+          DISPATCH_PUBLISH: ${{ inputs.publish }}
+        run: |
+          macos=false
+          case "$EVENT" in
+            push)
+              if [[ "$REF" == refs/tags/gn-cli-v* ]]; then
+                macos=true
+              elif grep -qiF '[macos]' <<<"$PUSH_MESSAGE"; then
+                macos=true
+              fi
+              ;;
+            pull_request)
+              if git log -1 --format=%B | grep -qiF '[macos]'; then
+                macos=true
+              fi
+              ;;
+            workflow_dispatch)
+              [ "$DISPATCH_MACOS" = true ] && macos=true
+              # Publishing a tagged release still has to ship all three binaries.
+              [ "$DISPATCH_PUBLISH" = true ] && [[ "$REF" == refs/tags/gn-cli-v* ]] && macos=true
+              ;;
+          esac
+          echo "macOS build: $macos"
+
+          matrix='[
+            {"name": "linux-x64",   "os": "ubuntu-24.04",   "exe": "gn-cli"},
+            {"name": "windows-x64", "os": "windows-latest", "exe": "gn-cli.exe"}
+          ]'
+          if [ "$macos" = true ]; then
+            matrix=$(jq '. + [{"name": "macos-arm64", "os": "macos-latest", "exe": "gn-cli"}]' <<<"$matrix")
+          fi
+          echo "matrix=$(jq -c '{include: .}' <<<"$matrix")" >> "$GITHUB_OUTPUT"
+
+      # Which rsys release, if any, this run publishes.
+      - name: release
+        id: release
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          DISPATCH_PUBLISH: ${{ inputs.publish }}
+          HAS_TOKEN: ${{ secrets.RSYS_TOKEN != '' }}
+        run: |
+          set -euo pipefail
+          publish=false; version=""; prerelease=false
+          # A manual run with publish: true counts as a push of its ref, from any branch.
+          if [ "$EVENT" = push ] || { [ "$EVENT" = workflow_dispatch ] && [ "$DISPATCH_PUBLISH" = true ]; }; then
+            case "$REF" in
+              refs/tags/gn-cli-v*)
+                publish=true; version="${REF#refs/tags/gn-cli-v}" ;;
+              # Pushes only reach here from master/main; a manual run may be on any branch.
+              refs/heads/*)
+                base="$(sed -nE 's/^project\(gn_cli VERSION ([0-9.]+).*/\1/p' CMakeLists.txt)"
+                [ -n "$base" ] || { echo "::error::no project(gn_cli VERSION ...) in CMakeLists.txt"; exit 1; }
+                publish=true; version="$base-dev.$GITHUB_RUN_NUMBER"; prerelease=true ;;
+              *)
+                echo "::warning::$REF is neither a branch nor a gn-cli-v* tag; not publishing" ;;
+            esac
+          fi
+          if [ "$publish" = true ] && [ "$HAS_TOKEN" != true ]; then
+            echo "::warning::RSYS_TOKEN is not set; not publishing gn-cli $version to rsys.ganamaga.me"
+            publish=false
+          fi
+          echo "publish: $publish, version: ${version:-none}, prerelease: $prerelease"
+          { echo "publish=$publish"; echo "version=$version"; echo "prerelease=$prerelease"; } >> "$GITHUB_OUTPUT"
+
+  build:
+    name: build (${{ matrix.name }})
+    needs: plan
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libcurl4-openssl-dev nlohmann-json3-dev
+
+      # vcpkg's binary cache lives here between runs, so curl is built once.
+      - name: cache vcpkg packages (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/vcpkg-cache
+          key: vcpkg-x64-windows-static-${{ hashFiles('.github/workflows/gn-cli.yml') }}
+
+      - name: install dependencies (Windows)
+        if: runner.os == 'Windows'
+        env:
+          VCPKG_DEFAULT_BINARY_CACHE: ${{ runner.temp }}/vcpkg-cache
+        run: |
+          mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
+          "$(cygpath -u "$VCPKG_INSTALLATION_ROOT")/vcpkg" install curl nlohmann-json --triplet x64-windows-static
+
+      - name: configure
+        run: |
+          args=(-S . -B build -DCMAKE_BUILD_TYPE=Release)
+          if [ "$RUNNER_OS" = Windows ]; then
+            args+=(
+              "-DCMAKE_TOOLCHAIN_FILE=$(cygpath -m "$VCPKG_INSTALLATION_ROOT")/scripts/buildsystems/vcpkg.cmake"
+              -DVCPKG_TARGET_TRIPLET=x64-windows-static
+              -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+            )
+          fi
+          cmake "${args[@]}"
+
+      - name: build
+        run: cmake --build build --config Release --parallel
+
+      - name: test RSYS publishing and downloads (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          python3 tests/test_rsys.py --binary build/gn-cli -v
+          python3 tests/test_publish_manifest.py -v
+
+      - name: collect binary
+        run: cmake --install build --config Release --prefix dist
+
+      # No server is reachable from here, so only check that the binary starts,
+      # parses its arguments, and refuses `me` without a session.
+      - name: smoke test
+        env:
+          GN_CLI_CONFIG_DIR: ${{ runner.temp }}/gn-cli-config
+        run: |
+          exe="${{ matrix.exe }}"
+          bin="dist/bin/$exe"
+          "$bin" --version
+          "dist/bin/gn${exe#gn-cli}" --version
+          "dist/bin/gncli${exe#gn-cli}" --version
+          "$bin" --help --no-unicode
+          "$bin" completion bash > /dev/null
+          [ "$("$bin" __complete s3 -- unsh)" = unshare ] || { echo "completion is broken"; exit 1; }
+          # Not interactive here (CI=true), so no command means help and exit 2, not a shell.
+          if "$bin" < /dev/null > /dev/null; then echo "no command should fail when not interactive"; exit 1; fi
+          # Captured, not piped into grep -q: that quits at the first match and the SIGPIPE
+          # fails the pipeline under bash's pipefail.
+          terms="$("$bin" terms)"
+          [ -n "$terms" ] || { echo "the embedded terms are empty"; exit 1; }
+          # Without accepting the terms nothing runs, however fine the command is.
+          refusal="$(env -u GN_ACCEPT_TERMS "$bin" me 2>&1 || true)"
+          case "$refusal" in
+            *"accept the Terms of Service"*) ;;
+            *) echo "commands should refuse before the terms are accepted, got: $refusal"; exit 1 ;;
+          esac
+          if "$bin" me; then echo "me without a session should fail"; exit 1; fi
+          if "$bin" s3 ls; then echo "s3 without a session should fail"; exit 1; fi
+          if "$bin" rsys projects; then echo "rsys without a session should fail"; exit 1; fi
+          printf abc > abc.txt
+          sum=$("$bin" rsys hash abc.txt | cut -d' ' -f1)
+          [ "$sum" = ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad ] || { echo "rsys hash got $sum"; exit 1; }
+          "$bin" auth logout
+
+      # Into the draft, as gn-cli-<platform>[.exe], with the binary just built. The legs run at
+      # once and the first to arrive creates the draft, so one that loses that race retries and
+      # then finds it. Re-runs are safe: a file already there with the same sha256 is skipped.
+      - name: upload to the release system
+        if: needs.plan.outputs.publish == 'true'
+        env:
+          GN_TOKEN: ${{ secrets.RSYS_TOKEN }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          PRERELEASE: ${{ needs.plan.outputs.prerelease }}
+          GN_CLI_CONFIG_DIR: ${{ runner.temp }}/gn-cli-config
+        run: |
+          set -euo pipefail
+          exe="${{ matrix.exe }}"
+          name="gn-cli-${{ matrix.name }}"; [ "${exe##*.}" = exe ] && name="$name.exe"
+          flags=(--draft --append --title "gn-cli $VERSION")
+          [ "$PRERELEASE" = true ] && flags+=(--prerelease)
+          [ "${{ matrix.name }}" = linux-x64 ] && flags+=(--primary "$name")
+          for attempt in 1 2 3; do
+            if "dist/bin/$exe" --no-unicode --no-color rsys publish gn-cli "$VERSION" "dist/bin/$exe#$name" "${flags[@]}"; then
+              exit 0
+            fi
+            [ "$attempt" = 3 ] || { echo "attempt $attempt failed, retrying"; sleep $((attempt * 5)); }
+          done
+          exit 1
+
+  release:
+    name: publish ${{ startsWith(github.ref, 'refs/tags/') && 'release' || 'dev build' }}
+    needs: [plan, build]
+    if: needs.plan.outputs.publish == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      GN_TOKEN: ${{ secrets.RSYS_TOKEN }}
+      VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: scripts/rsys_variants.py
+          sparse-checkout-cone-mode: false
+
+      # The Linux binary out of the draft, over the API: it is the gn-cli that does the rest.
+      - name: fetch gn-cli from the draft
+        run: |
+          set -euo pipefail
+          api="https://rsys.ganamaga.me/api/v2/rsys"
+          curl -fsS --retry 3 -H "X-CLI-Token: $GN_TOKEN" "$api/projects/gn-cli/releases/$VERSION" > draft.json
+          read -r id sha < <(jq -r '.files[] | select(.filename == "gn-cli-linux-x64" and .status == "READY") | "\(.id) \(.sha256)"' draft.json)
+          [ -n "${id:-}" ] || { echo "::error::the draft of gn-cli $VERSION has no gn-cli-linux-x64"; exit 1; }
+          curl -fsS --retry 3 -H "X-CLI-Token: $GN_TOKEN" -o gn-cli "$api/files/$id/download"
+          echo "$sha  gn-cli" | sha256sum --check --status || { echo "::error::gn-cli-linux-x64 does not match its sha256"; exit 1; }
+          chmod +x gn-cli
+          ./gn-cli --version
+
+      # A tag also gets a GitHub release with the same binaries, and its generated notes become
+      # the rsys changelog. A re-run finds the GitHub release already there and keeps it.
+      - name: create GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir release
+          for f in $(jq -r '.files[] | select(.status == "READY") | .filename' draft.json); do
+            ./gn-cli --no-unicode --no-color rsys download gn-cli "$VERSION" --file "$f" -o release/
+          done
+          ls -la release
+          if ! gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" release/* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
+          fi
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json body -q .body > notes.md
+
+      - name: dev build notes
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        env:
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          {
+            echo "Development build from \`${GITHUB_SHA:0:12}\` on $GITHUB_REF_NAME ($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)."
+            if [ -n "$COMMIT_MESSAGE" ]; then echo; echo "$COMMIT_MESSAGE"; fi
+          } > notes.md
+
+      - name: publish the release
+        run: |
+          set -euo pipefail
+          ./gn-cli --no-unicode --no-color rsys edit gn-cli "$VERSION" --changelog-file notes.md
+          if [ "$(jq -r .status draft.json)" = PUBLISHED ]; then
+            echo "gn-cli $VERSION is already published"
+          else
+            # Build the complete manifest once; parallel upload jobs must not replace it.
+            ./gn-cli --no-unicode --no-color rsys show gn-cli "$VERSION" --json > draft.json
+            python3 scripts/rsys_variants.py < draft.json > variants.json
+            ./gn-cli --no-unicode --no-color rsys publish gn-cli "$VERSION" --variants-file variants.json
+          fi
+          echo "### Published gn-cli $VERSION to rsys.ganamaga.me" >> "$GITHUB_STEP_SUMMARY"
+
+  # A stable tagged release also goes to the Homebrew tap (vitekform/homebrew-tap), as
+  # Formula/gn-cli.rb rendered from homebrew/gn-cli.rb.in with this release's sha256s:
+  #   brew install vitekform/tap/gn-cli
+  # That needs the repository secret HOMEBREW_TAP_DEPLOY_KEY_B64: the private half of an SSH
+  # deploy key with write access on the tap, base64-encoded so pasting it into the secrets UI
+  # can't mangle its newlines (`base64 -w0 tap_key`; line-wrapped base64 works too). Without
+  # it the job says so and does nothing.
+  homebrew:
+    name: update Homebrew tap
+    needs: [plan, release]
+    if: needs.plan.outputs.publish == 'true' && needs.plan.outputs.prerelease != 'true' && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+      HAS_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY_B64 != '' }}
+      GN_ACCEPT_TERMS: "1"
+    steps:
+      - name: check
+        id: check
+        run: |
+          go=true
+          if [ "$HAS_KEY" != true ]; then
+            echo "::warning::HOMEBREW_TAP_DEPLOY_KEY_B64 is not set; not updating the Homebrew tap"; go=false
+          elif [[ "$VERSION" == *-* ]]; then
+            echo "gn-cli $VERSION is a pre-release version; the tap only gets stable ones"; go=false
+          fi
+          echo "go=$go" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v5
+        if: steps.check.outputs.go == 'true'
+        with:
+          sparse-checkout: homebrew
+          path: source
+
+      # Decoded into a file rather than handed to actions/checkout's ssh-key, which would need
+      # the plain key in a step output, where nothing masks it. GitHub's host key is pinned
+      # (https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints).
+      - name: clone the tap
+        if: steps.check.outputs.go == 'true'
+        env:
+          KEY_B64: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY_B64 }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          tr -d ' \r\n' <<<"$KEY_B64" | base64 -d > ~/.ssh/homebrew_tap
+          chmod 600 ~/.ssh/homebrew_tap
+          ssh-keygen -y -f ~/.ssh/homebrew_tap > /dev/null \
+            || { echo "::error::HOMEBREW_TAP_DEPLOY_KEY_B64 does not decode to an unencrypted SSH private key"; exit 1; }
+          echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" > ~/.ssh/known_hosts
+          echo "GIT_SSH_COMMAND=ssh -i $HOME/.ssh/homebrew_tap -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes" >> "$GITHUB_ENV"
+          GIT_SSH_COMMAND="ssh -i $HOME/.ssh/homebrew_tap -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes" \
+            git clone --depth 1 git@github.com:vitekform/homebrew-tap.git tap
+
+      # The sha256s come from the public release JSON, i.e. exactly what brew will download.
+      - name: render the formula
+        if: steps.check.outputs.go == 'true'
+        run: |
+          set -euo pipefail
+          curl -fsS --retry 3 "https://rsys.ganamaga.me/gn-cli/public/v/$VERSION.json" > release.json
+          sha() {
+            local s; s=$(jq -r --arg f "$1" '.files[] | select(.filename == $f) | .sha256' release.json)
+            [ -n "$s" ] || { echo "::error::gn-cli $VERSION has no $1" >&2; exit 1; }
+            echo "$s"
+          }
+          macos=$(sha gn-cli-macos-arm64)
+          linux=$(sha gn-cli-linux-x64)
+          mkdir -p tap/Formula
+          sed -e "s/@VERSION@/$VERSION/g" \
+              -e "s/@SHA256_MACOS_ARM64@/$macos/g" \
+              -e "s/@SHA256_LINUX_X64@/$linux/g" \
+              source/homebrew/gn-cli.rb.in > tap/Formula/gn-cli.rb
+          # The tap's own licence, at its root where GitHub shows it.
+          cp source/homebrew/LICENSE tap/LICENSE
+          ! grep -n '@[A-Z0-9_]*@' tap/Formula/gn-cli.rb || { echo "::error::unfilled placeholder"; exit 1; }
+          # The sha256 check is the point; make sure brew's URLs actually resolve too.
+          curl -fsSIL --retry 3 -o /dev/null "https://rsys.ganamaga.me/gn-cli/public/v/$VERSION/gn-cli-linux-x64"
+
+      # Install the rendered formula with the runner's own Homebrew, from a throwaway local tap,
+      # and run its test block: a formula that can't install never reaches the real tap.
+      - name: try the formula
+        if: steps.check.outputs.go == 'true'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+          HOMEBREW_NO_ANALYTICS: "1"
+          GN_ACCEPT_TERMS: "1"
+        run: |
+          set -euo pipefail
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          brew tap-new --no-git gn-cli-ci/try
+          cp tap/Formula/gn-cli.rb "$(brew --repository gn-cli-ci/try)/Formula/gn-cli.rb"
+          brew install gn-cli-ci/try/gn-cli
+          brew test gn-cli-ci/try/gn-cli
+          gn --version
+          brew uninstall gn-cli-ci/try/gn-cli
+          brew untap gn-cli-ci/try
+
+      - name: push to the tap
+        if: steps.check.outputs.go == 'true'
+        working-directory: tap
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/gn-cli.rb LICENSE
+          if git diff --cached --quiet; then
+            echo "Formula/gn-cli.rb and LICENSE are already at $VERSION"
+          else
+            git commit -m "gn-cli $VERSION"
+            git push
+          fi
+          echo "### Homebrew tap: gn-cli $VERSION (\`brew install vitekform/tap/gn-cli\`)" >> "$GITHUB_STEP_SUMMARY"

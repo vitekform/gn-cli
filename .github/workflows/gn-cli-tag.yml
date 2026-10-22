@@ -1,0 +1,66 @@
+# =============================================================================
+# gn-cli-tag.yml — release gn-cli by bumping its version.
+#
+# On a push to master/main that touches CMakeLists.txt, reads
+# project(gn_cli VERSION x.y.z) and, when there is no gn-cli-vx.y.z tag yet,
+# creates it on the pushed commit and starts gn-cli.yml on that tag with
+# publish: true — exactly what pushing the tag by hand does: the rsys release,
+# the GitHub release and the Homebrew tap.
+#
+# The explicit dispatch is needed because a tag pushed with GITHUB_TOKEN
+# triggers no workflows; workflow_dispatch is the one event it may still start.
+# A version that is already tagged (by hand or by an earlier run) is left alone,
+# so pushing the tag yourself keeps working and never releases twice.
+#
+# Run it by hand (workflow_dispatch) to tag the current version of the selected branch
+# without another push.
+# =============================================================================
+
+name: gn-cli tag
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - CMakeLists.txt
+      - .github/workflows/gn-cli-tag.yml
+  workflow_dispatch:
+
+concurrency:
+  group: gn-cli-tag
+  cancel-in-progress: false
+
+permissions:
+  contents: write  # push the tag
+  actions: write   # dispatch gn-cli.yml
+
+jobs:
+  tag:
+    name: tag the new version
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: CMakeLists.txt
+          sparse-checkout-cone-mode: false
+
+      - name: tag and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(sed -nE 's/^project\(gn_cli VERSION ([0-9.]+).*/\1/p' CMakeLists.txt)"
+          [ -n "$version" ] || { echo "::error::no project(gn_cli VERSION ...) in CMakeLists.txt"; exit 1; }
+          tag="gn-cli-v$version"
+
+          if [ -n "$(git ls-remote --tags origin "refs/tags/$tag")" ]; then
+            echo "$tag already exists; nothing to release"
+            echo "### gn-cli $version is already tagged; nothing to do" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          git push origin "$GITHUB_SHA:refs/tags/$tag"
+          gh workflow run gn-cli.yml --repo "$GITHUB_REPOSITORY" --ref "$tag" -f publish=true
+          echo "Tagged $GITHUB_SHA as $tag and started gn-cli.yml on it"
+          echo "### Tagged \`$tag\`; the release runs in the gn-cli workflow" >> "$GITHUB_STEP_SUMMARY"
