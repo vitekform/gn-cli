@@ -1,0 +1,48 @@
+MIT License with an additional User-Agent condition
+
+Copyright (c) 2026 Vít Formánek and the Contributors.
+Contributors: Ladislav Kotoulek.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+Additional User-Agent condition
+
+The permission granted above is also subject to this condition:
+
+A "Modified Build" is an executable built from source code that has been
+modified from a version of the Software published by the copyright holders,
+other than a build published by the copyright holders as an official gn-cli
+build. Compiling unchanged source with a different compiler, platform or
+build configuration does not, by itself, make a build a Modified Build.
+
+When making, using or distributing a Modified Build, you must ensure that
+every HTTP request it sends uses either:
+
+(a) a custom User-Agent that identifies the modified client distinctly from
+    official gn-cli builds; or
+(b) a User-Agent containing the literal substring "_fork".
+
+This requirement also applies when reusing saved sessions or credentials.
+The additional condition must be preserved with the permission notice in
+all copies or substantial portions of the Software.
+
+This licence covers the CLI software, not access to the hosted NextGen
+services. Use of those services remains subject to their applicable terms.
+Third-party components remain under their respective licences, as listed
+in THIRD-PARTY-NOTICES.
