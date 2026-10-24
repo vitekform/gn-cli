@@ -206,12 +206,7 @@ int admin_providers(const Context& ctx);
 int admin_models(const Context& ctx);
 int admin_oauth_clients(const Context& ctx);
 
-int stock_price(const Context& ctx);
-int stock_tickers(const Context& ctx);
-int stock_score(const Context& ctx);
-int stock_news(const Context& ctx);
-int stock_macro(const Context& ctx);
-int stock_geo(const Context& ctx);
+int stock_sunset(const Context& ctx);
 
 int home_nodes(const Context& ctx);
 int home_rooms(const Context& ctx);

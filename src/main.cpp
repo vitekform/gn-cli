@@ -204,13 +204,9 @@ void print_help() {
               << "  " << green("bakalink timetable permanent") << "  /  " << green("permanent push") << " --file <json|->   The permanent timetable\n"
               << "      --account <id|name>   The account, for everything but accounts (or $GN_BAKALINK_ACCOUNT)\n"
               << "      --bakalink-token <t>  The token (or $GN_BAKALINK_TOKEN)\n\n"
-              << bold("Markets") << " " << dim("(the stock module; prices and scores need the stockRead permission)") << "\n"
-              << "  " << green("stock") << " <ticker>              Price, change and a sparkline (--period 1m, --interval auto)\n"
-              << "  " << green("stock score") << " <ticker>...     Volatility forecast and ranks (no buy/sell signals)\n"
-              << "  " << green("stock news") << " [ticker]         Headlines with sentiment (--limit)\n"
-              << "  " << green("stock macro") << " [series]        FRED series: latest values, or one series' history\n"
-              << "  " << green("stock geo") << " [country]         GDELT events\n"
-              << "  " << green("stock tickers") << "               What has price history\n\n"
+              << bold("Markets (sunset)") << "\n"
+              << "  " << green("stock") << "                       Stock system has been sunset\n"
+              << "      https://ganamaga.me/blog/stock/sunset\n\n"
               << bold("Updating") << "\n"
               << "  " << green("update") << "                      Replace this gn-cli with the newest release (sha256-checked)\n"
               << "      --check               Only say whether there is one (exit 10 if so)\n"
@@ -467,10 +463,7 @@ const std::vector<Group>& groups() {
          {{{"nodes", "devices", "ls"}, home_nodes}, {{"rooms"}, home_rooms}, {{"room"}, home_room},
           {{"poll"}, home_poll}, {{"config"}, home_config}, {{"reset"}, home_reset}, {{"fun"}, home_fun}},
          home_nodes},
-        {{"stock", "stocks"},
-         {{{"price", "quote"}, stock_price}, {{"score"}, stock_score}, {{"news"}, stock_news}, {{"macro"}, stock_macro},
-          {{"geo", "geoevents"}, stock_geo}, {{"tickers"}, stock_tickers}},
-         stock_price},
+        {{"stock", "stocks"}, {}, stock_sunset},
         {{"admin"},
          {{{"users"}, admin_users}, {{"user"}, admin_user}, {{"create-user"}, admin_create_user},
           {{"perms", "permissions"}, admin_perms}, {{"password"}, admin_password}, {{"credits"}, admin_credits},
@@ -559,7 +552,7 @@ std::vector<std::string> complete(const std::vector<std::string>& before, const 
         else if (prev == "--expires") out = {"1h", "24h", "7d", "30d", "90d", "1y", "never"};
         else if (prev == "--scope" || prev == "-s")
             out = {"account:read", "credits:read", "passkeys:read", "api-tokens:read", "s3:read", "s3:write",
-                   "s3:share", "tmp:read", "tmp:write", "files:read", "files:write", "chat:read", "chat:write", "api-tokens:write", "imagen:read", "imagen:write", "tts", "breeze:read", "breeze:write", "stock:read", "smarthome:read", "smarthome:write", "kathars:admin", "khk:admin", "booru:read", "comics:read", "roleplay:read", "roleplay:write", "vault", "rsys:read", "rsys:publish", "rsys:admin", "rsys:maven", "bakalink:read", "bakalink:manage"};
+                   "s3:share", "tmp:read", "tmp:write", "files:read", "files:write", "chat:read", "chat:write", "api-tokens:write", "imagen:read", "imagen:write", "tts", "breeze:read", "breeze:write", "smarthome:read", "smarthome:write", "kathars:admin", "khk:admin", "booru:read", "comics:read", "roleplay:read", "roleplay:write", "vault", "rsys:read", "rsys:publish", "rsys:admin", "rsys:maven", "bakalink:read", "bakalink:manage"};
     } else if (!current.empty() && current[0] == '-') {
         for (const auto& o : kOptions) out.push_back(o.name);
     } else {
@@ -673,8 +666,8 @@ int dispatch(Invocation& inv) {
                 throw std::invalid_argument("Compatibility options are supported only by rsys publish, latest and download");
             return handler(ctx);
         };
-        // Reading the terms, the licence, the help and the completions never needs accepting them.
-        static const std::vector<std::string> exempt = {"terms", "license", "completion", "help"};
+        // Local notices, terms, licence, help and completions need no service-terms acceptance.
+        static const std::vector<std::string> exempt = {"terms", "license", "completion", "help", "stock"};
         if (group && !named(exempt, group->names[0]) && !commands::require_terms(ctx)) return 1;
         if (!group) {
             rc = usage_error("unknown command '" + cmd + "'");
