@@ -352,23 +352,21 @@ account: once pushed they need not be repeated. The permanent timetable is
 replaced whole by `{"hours": […], "lessons": [{"dayOfWeek": 1, "hour": "3", "cycle": "Lichý", "subject": …, "teacher": …, "room": "12", "group": "3.B"}]}`,
 with `dayOfWeek` 1 (Monday) to 7 and `cycle` left out for lessons on every week.
 
-## Markets
+## Markets (sunset)
 
-The stock module's data, read-only (prices and scores need the `stockRead`
-permission; a CLI token needs `stock:read`):
+The Stock system has been sunset. Every `gn stock` command (and the `stocks`
+alias), including former price, score, news, macro, geo and ticker commands,
+now prints:
 
-```
-gn stock nvda                      # last price, change, high/low, volume and a sparkline
-gn stock aapl --period 6m          # 1d 5d 1m 6m ytd 1y max …; --interval 1day etc.
-gn stock score ionq nvda           # volatility forecast, 21-day range, momentum/quality ranks
-gn stock news nvda --limit 5       # headlines with sentiment
-gn stock macro                     # FRED series, latest values; macro FEDFUNDS for one's history
-gn stock geo usa                   # GDELT events, Goldstein scale
-gn stock tickers                   # which tickers have price history
+```text
+Stock system has been sunset
+https://ganamaga.me/blog/stock/sunset
 ```
 
-`score` shows risk and relative ranks only; the service deliberately serves no
-buy/sell signal (see `ml_service/README.md` for how much each field is worth).
+These commands exit with status 1 without authentication, service-terms prompts
+or network requests. With `--json`, they return an object with `error` set to
+`stock_sunset`, plus `message` and `url`. Read
+[why we decided to sunset the system](https://ganamaga.me/blog/stock/sunset).
 
 ## Roleplay
 
@@ -664,7 +662,7 @@ scopes list, and the server refuses everything else with `403 insufficient_scope
 | `tts` | `GET`/`POST /api/v2/tts/voices`, `DELETE …/voices/{id}`, `GET /api/v2/tts/generate` (needs aiTTS) |
 | `breeze:read` | `GET /api/v2/tts/breeze/status`, `…/voices`, `…/voices/{name}`: the Breeze TTS server's state and your Breeze voices (needs aiTTS) |
 | `breeze:write` | `POST /api/v2/tts/breeze/synthesize`, `…/stream`, `…/voices`, `…/load`, `…/unload`, `DELETE …/voices/{name}` (unload needs the admin panels too) |
-| `stock:read` | `GET /api/v2/stock/candles/**`, `…/ml/**`, `…/news`, `…/macro`, `…/geoevents` |
+| `stock:read` | Retired: the Stock system has been sunset. |
 | `smarthome:read` | `GET /api/v2/smarthome/nodes`, `…/rooms` (needs smartHome) |
 | `smarthome:write` | `POST /api/v2/smarthome/rooms`, `…/nodes/*`: commands to the devices |
 | `vault` | `POST /api/v2/secure-storage/*`: list, extract, hide and share vault files (needs s3, or gallery to read) |

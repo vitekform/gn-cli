@@ -1,5 +1,15 @@
 # RSYS CLI tests
 
+Retired stock commands are also checked against the full executable:
+
+```sh
+python3 tests/test_stock_sunset.py --binary build/gn-cli -v
+```
+
+This checks all former subcommands and aliases in text and JSON modes with
+an empty config directory and an unreachable local API URL. They must print
+the sunset notice without authentication, terms prompts or network requests.
+
 The suite runs a binary against a disposable local HTTP server. It uses fake tokens,
 temporary config/download directories, and no production services. It checks exact
 matching, manifests and shared files, early validation, interrupted uploads, schema

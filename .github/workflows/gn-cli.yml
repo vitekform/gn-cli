@@ -233,6 +233,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           python3 tests/test_rsys.py --binary build/gn-cli -v
+          python3 tests/test_stock_sunset.py --binary build/gn-cli -v
           python3 tests/test_publish_manifest.py -v
 
       - name: collect binary
