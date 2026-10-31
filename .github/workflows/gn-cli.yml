@@ -1,6 +1,8 @@
 # =============================================================================
-# gn-cli.yml — build the gn-cli command-line client for Linux (x64 and
-# arm64), macOS (arm64) and Windows (x64 and arm64).
+# gn-cli.yml — build the gn-cli command-line client for
+#   Linux    x64, arm64, armv7, riscv64, ppc64le, s390x
+#   macOS    one universal binary (arm64 + x64), published under both names
+#   Windows  x64, arm64, x86
 #
 # Runs on GitHub-hosted runners: the CLI needs neither the loopback registry
 # nor the production .env, so it has no business queueing on gn_wkst. Pull
@@ -41,17 +43,30 @@
 # A stable gn-cli-v* tag then also updates the Homebrew tap vitekform/homebrew-tap
 # (the homebrew job; needs the secret HOMEBREW_TAP_DEPLOY_KEY_B64, see there).
 #
-# The arm64 legs run natively on GitHub's arm64 runners (ubuntu-24.04-arm,
-# windows-11-arm), which are free for public repositories, so there is no
-# cross-compiling and the smoke test runs the real binary.
+# How each one is built:
+#   native   linux-x64, linux-arm64 (ubuntu-24.04-arm), windows-x64,
+#            windows-arm64 (windows-11-arm) and windows-x86 (32-bit, on the
+#            x64 runner through WOW64) build and run on their own hardware.
+#   cross    linux-armv7/-riscv64/-ppc64le/-s390x are cross-compiled on
+#            ubuntu-24.04 against Ubuntu's multiarch packages
+#            (scripts/linux-cross-setup.sh) and every test runs the result
+#            under QEMU user-mode emulation, transparently through binfmt.
+#   macOS    one build for arm64 and x86_64 (CMAKE_OSX_ARCHITECTURES) on the
+#            Apple Silicon runner, uploaded as gn-cli-macos-arm64 and
+#            gn-cli-macos-x64. The x86_64 half is run too where Rosetta is.
+#
+# Every architecture must be a choice of the gn-cli project's rsys template
+# (field `architecture`), or the publish job is refused: "Unknown choice".
 #
 # Dependencies per platform:
-#   Linux    system libcurl (OpenSSL) and nlohmann-json from apt. The binary
-#            links libcurl dynamically, so the target needs libcurl4 installed
-#            (it is on any desktop Ubuntu/Debian).
+#   Linux    system libcurl (OpenSSL) and nlohmann-json from apt (for the
+#            target architecture on cross legs). The binary links libcurl
+#            dynamically, so the target needs libcurl4 installed (it is on any
+#            desktop Ubuntu/Debian).
 #   macOS    the libcurl in the SDK; nlohmann-json is fetched by CMake.
+#            Built for macOS 11 and newer.
 #   Windows  curl (Schannel, so no OpenSSL) and nlohmann-json from the
-#            runner's vcpkg (x64-/arm64-windows-static), linked statically:
+#            runner's vcpkg (<arch>-windows-static), linked statically:
 #            one self-contained .exe.
 # =============================================================================
 
@@ -142,11 +157,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: linux-x64,     os: ubuntu-24.04,     exe: gn-cli }
-          - { name: linux-arm64,   os: ubuntu-24.04-arm, exe: gn-cli }
-          - { name: macos-arm64,   os: macos-latest,     exe: gn-cli }
-          - { name: windows-x64,   os: windows-latest,   exe: gn-cli.exe, arch: x64 }
-          - { name: windows-arm64, os: windows-11-arm,   exe: gn-cli.exe, arch: arm64 }
+          # `files` is what the binary is published as; by default gn-cli-<name>[.exe].
+          # `cross` is the Debian architecture to cross-compile for.
+          - { name: linux-x64,       os: ubuntu-24.04,     exe: gn-cli }
+          - { name: linux-arm64,     os: ubuntu-24.04-arm, exe: gn-cli }
+          - { name: linux-armv7,     os: ubuntu-24.04,     exe: gn-cli, cross: armhf }
+          - { name: linux-riscv64,   os: ubuntu-24.04,     exe: gn-cli, cross: riscv64 }
+          - { name: linux-ppc64le,   os: ubuntu-24.04,     exe: gn-cli, cross: ppc64el }
+          - { name: linux-s390x,     os: ubuntu-24.04,     exe: gn-cli, cross: s390x }
+          - { name: macos-universal, os: macos-latest,     exe: gn-cli, files: gn-cli-macos-arm64 gn-cli-macos-x64 }
+          - { name: windows-x64,     os: windows-latest,   exe: gn-cli.exe, arch: x64 }
+          - { name: windows-arm64,   os: windows-11-arm,   exe: gn-cli.exe, arch: arm64 }
+          - { name: windows-x86,     os: windows-latest,   exe: gn-cli.exe, arch: x86 }
     defaults:
       run:
         shell: bash
@@ -154,10 +176,18 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: install dependencies (Linux)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && !matrix.cross
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libcurl4-openssl-dev nlohmann-json3-dev
+
+      - name: install cross toolchain and QEMU (Linux ${{ matrix.cross }})
+        if: matrix.cross
+        run: |
+          sudo scripts/linux-cross-setup.sh "${{ matrix.cross }}"
+          triplet="$(scripts/linux-cross-setup.sh --cmake-args "${{ matrix.cross }}" | sed -E 's/.*LIBRARY_ARCHITECTURE=//')"
+          # pkg-config must describe the target's libcurl, not the host's.
+          echo "PKG_CONFIG_LIBDIR=/usr/lib/$triplet/pkgconfig:/usr/share/pkgconfig" >> "$GITHUB_ENV"
 
       # vcpkg's binary cache lives here between runs, so curl is built once.
       - name: cache vcpkg packages (Windows)
@@ -186,9 +216,17 @@ jobs:
       - name: configure
         run: |
           args=(-S . -B build -DCMAKE_BUILD_TYPE=Release)
-          if [ "$RUNNER_OS" = Windows ]; then
-            # -A picks the Visual Studio target platform explicitly (x64 or ARM64).
-            platform=x64; [ "${{ matrix.arch }}" = arm64 ] && platform=ARM64
+          if [ -n "${{ matrix.cross }}" ]; then
+            read -ra cross <<<"$(scripts/linux-cross-setup.sh --cmake-args "${{ matrix.cross }}")"
+            args+=("${cross[@]}")
+          elif [ "$RUNNER_OS" = macOS ]; then
+            args+=("-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0)
+          elif [ "$RUNNER_OS" = Windows ]; then
+            # -A picks the Visual Studio target platform explicitly.
+            case "${{ matrix.arch }}" in
+              x64) platform=x64 ;; arm64) platform=ARM64 ;; x86) platform=Win32 ;;
+              *) echo "::error::unknown Windows arch ${{ matrix.arch }}"; exit 1 ;;
+            esac
             args+=(
               -A "$platform"
               "-DCMAKE_TOOLCHAIN_FILE=$(cygpath -m "$VCPKG_INSTALLATION_ROOT")/scripts/buildsystems/vcpkg.cmake"
@@ -207,9 +245,25 @@ jobs:
           python3 tests/test_rsys.py --binary build/gn-cli -v
           python3 tests/test_stock_sunset.py --binary build/gn-cli -v
           python3 tests/test_publish_manifest.py -v
+          python3 tests/test_check_binary_arch.py -v
 
       - name: collect binary
         run: cmake --install build --config Release --prefix dist
+
+      # The binary must really be what its name promises: QEMU and Rosetta run nearly
+      # anything, so a wrong compiler or a missed flag would otherwise go unnoticed.
+      - name: check architecture
+        run: |
+          py="$(command -v python3 || command -v python)"
+          "$py" scripts/check_binary_arch.py "dist/bin/${{ matrix.exe }}" "${{ matrix.name }}"
+          if [ "$RUNNER_OS" = macOS ]; then
+            lipo -info dist/bin/gn-cli
+            if arch -x86_64 /usr/bin/true 2>/dev/null; then
+              arch -x86_64 dist/bin/gn-cli --version
+            else
+              echo "No Rosetta on this runner; the x86_64 half is checked by its header only"
+            fi
+          fi
 
       # No server is reachable from here, so only check that the binary starts,
       # parses its arguments, and refuses `me` without a session.
@@ -245,7 +299,7 @@ jobs:
           [ "$sum" = ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad ] || { echo "rsys hash got $sum"; exit 1; }
           "$bin" auth logout
 
-      # Into the draft, as gn-cli-<platform>[.exe], with the binary just built. The legs run at
+      # Into the draft, as gn-cli-<platform>[.exe] (or matrix.files), with the binary just built. The legs run at
       # once and the first to arrive creates the draft, so one that loses that race retries and
       # then finds it. Re-runs are safe: a file already there with the same sha256 is skipped.
       - name: upload to the release system
@@ -258,12 +312,16 @@ jobs:
         run: |
           set -euo pipefail
           exe="${{ matrix.exe }}"
-          name="gn-cli-${{ matrix.name }}"; [ "${exe##*.}" = exe ] && name="$name.exe"
+          names="${{ matrix.files }}"
+          if [ -z "$names" ]; then
+            names="gn-cli-${{ matrix.name }}"; [ "${exe##*.}" = exe ] && names="$names.exe"
+          fi
+          files=(); for name in $names; do files+=("dist/bin/$exe#$name"); done
           flags=(--draft --append --title "gn-cli $VERSION")
           [ "$PRERELEASE" = true ] && flags+=(--prerelease)
-          [ "${{ matrix.name }}" = linux-x64 ] && flags+=(--primary "$name")
+          [ "${{ matrix.name }}" = linux-x64 ] && flags+=(--primary gn-cli-linux-x64)
           for attempt in 1 2 3; do
-            if "dist/bin/$exe" --no-unicode --no-color rsys publish gn-cli "$VERSION" "dist/bin/$exe#$name" "${flags[@]}"; then
+            if "dist/bin/$exe" --no-unicode --no-color rsys publish gn-cli "$VERSION" "${files[@]}" "${flags[@]}"; then
               exit 0
             fi
             [ "$attempt" = 3 ] || { echo "attempt $attempt failed, retrying"; sleep $((attempt * 5)); }

@@ -20,7 +20,7 @@ The RSYS suite starts a local mock server and uses temporary directories and
 fake credentials. It checks publishing, compatibility selection, private
 downloads, multipart uploads and checksums without contacting production.
 [tests/README.md](tests/README.md) describes focused builds and optional public
-rollout checks. Linux, Windows and macOS packaging is checked by CI.
+rollout checks. Linux, Windows and macOS packaging is checked by CI, for every architecture.
 
 ## API changes
 

@@ -37,9 +37,16 @@ configuring secrets, use Actions → gn-cli → Run workflow, select the existin
 alone will not release an already-existing tag. Failed draft uploads can be
 retried for that version; already-uploaded identical files are reused.
 
-Published filenames are `gn-cli-linux-x64`, `gn-cli-linux-arm64`,
-`gn-cli-macos-arm64`, `gn-cli-windows-x64.exe` and `gn-cli-windows-arm64.exe`
-(the arm64 Linux and Windows builds were added in 1.12.1). The updater, public rsys project, compatibility
+Published filenames are `gn-cli-linux-{x64,arm64,armv7,riscv64,ppc64le,s390x}`,
+`gn-cli-macos-{arm64,x64}` (the same universal binary under both names) and
+`gn-cli-windows-{x64,arm64,x86}.exe`. Linux and Windows arm64 arrived in 1.12.1,
+the rest in 1.13.0.
+
+Every architecture above must be a choice of the `architecture` field in the
+gn-cli project's rsys template revision (x64, arm64, armv7, riscv64, ppc64le,
+s390x, x86), or the publish job is refused with "Unknown choice for
+architecture". Adding a platform therefore starts in the template editor: add
+the choice, publish the revision and move the project to it, then push. The updater, public rsys project, compatibility
 selectors and `brew install vitekform/tap/gn-cli` stay unchanged. Existing
 releases remain hosted at rsys. Historical GitHub releases in the private
 repository do not need to be copied.

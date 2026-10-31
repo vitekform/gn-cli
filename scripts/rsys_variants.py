@@ -5,6 +5,15 @@ import re
 import sys
 
 
+# Every platform CI builds (.github/workflows/gn-cli.yml); a release must have all of them.
+# Each architecture has to be a choice of the project's rsys template, or publishing fails.
+PLATFORMS = {
+    'linux-x64', 'linux-arm64', 'linux-armv7', 'linux-riscv64', 'linux-ppc64le', 'linux-s390x',
+    'macos-arm64', 'macos-x64',
+    'windows-x64', 'windows-arm64', 'windows-x86',
+}
+
+
 def manifest(release, require_complete=True):
     variants = []
     seen = set()
@@ -12,8 +21,8 @@ def manifest(release, require_complete=True):
         if file['status'] != 'READY':
             raise ValueError('Unfinished upload: ' + file['filename'])
         name = file['filename']
-        match = re.fullmatch(r'gn-cli-(linux|macos|windows)-(x64|arm64)(\.exe)?', name)
-        if not match:
+        match = re.fullmatch(r'gn-cli-(linux|macos|windows)-([a-z0-9]+)(\.exe)?', name)
+        if not match or f'{match[1]}-{match[2]}' not in PLATFORMS:
             raise ValueError('Unrecognized CLI artifact: ' + name)
         os_name, architecture, extension = match.groups()
         if bool(extension) != (os_name == 'windows'):
@@ -23,9 +32,8 @@ def manifest(release, require_complete=True):
             raise ValueError('Duplicate platform: ' + key)
         seen.add(key)
         variants.append(dict(key=key, selection=dict(os=os_name, architecture=architecture), files=[name], defaultFile=name))
-    required = {'linux-x64', 'linux-arm64', 'macos-arm64', 'windows-x64', 'windows-arm64'}
-    if require_complete and not required <= seen:
-        raise ValueError('Missing build(s): ' + ', '.join(sorted(required - seen)))
+    if require_complete and not PLATFORMS <= seen:
+        raise ValueError('Missing build(s): ' + ', '.join(sorted(PLATFORMS - seen)))
     if not variants:
         raise ValueError('No CLI binaries supplied')
     return dict(variants=variants)

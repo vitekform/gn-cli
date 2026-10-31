@@ -710,7 +710,7 @@ stale when commands change.
 
 ## Installing
 
-With Homebrew (macOS on Apple Silicon, Linux x64 and arm64):
+With Homebrew (macOS on Apple Silicon or Intel, Linux x64 and arm64):
 
 ```
 brew install vitekform/tap/gn-cli
@@ -746,9 +746,20 @@ cmake -S . -B build && cmake --build build -j
 
 On Windows, take curl from vcpkg (see `.github/workflows/gn-cli.yml`).
 
-CI builds and tests Linux x64, Linux arm64, macOS arm64, Windows x64 and
-Windows arm64 on every push and pull request (the arm64 legs run natively on
-GitHub's arm64 runners). Pull requests and manual runs without `publish: true`
+CI builds and tests every platform on every push and pull request: Linux x64,
+arm64, armv7, riscv64, ppc64le and s390x, a universal macOS binary (Apple
+Silicon and Intel), and Windows x64, arm64 and x86. Linux arm64 and Windows
+arm64 run natively on GitHub's arm64 runners; the other Linux architectures are
+cross-compiled and tested under QEMU. To do the same locally on Ubuntu x64:
+
+```
+sudo scripts/linux-cross-setup.sh riscv64     # armhf, riscv64, ppc64el, s390x
+PKG_CONFIG_LIBDIR=/usr/lib/riscv64-linux-gnu/pkgconfig:/usr/share/pkgconfig \
+  cmake -S . -B build-riscv64 $(scripts/linux-cross-setup.sh --cmake-args riscv64)
+cmake --build build-riscv64 -j && ./build-riscv64/gn-cli --version
+```
+
+Pull requests and manual runs without `publish: true`
 do not publish. See [CONTRIBUTING.md](CONTRIBUTING.md) for local tests.
 
 To release, bump `VERSION` in `CMakeLists.txt` and push to `main` or `master`:

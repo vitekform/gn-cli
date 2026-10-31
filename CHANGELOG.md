@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.13.0
+
+- New builds: Linux armv7 (`gn-cli-linux-armv7`, 32-bit Raspberry Pi OS and other
+  armhf systems), riscv64, ppc64le and s390x, cross-compiled and tested under QEMU.
+- macOS is now one universal binary for Apple Silicon and Intel, published as both
+  `gn-cli-macos-arm64` and `gn-cli-macos-x64`, and runs on macOS 11 and newer.
+- Windows x86 (32-bit) build: `gn-cli-windows-x86.exe`.
+- `gn-cli update` picks the right build on all of these; Homebrew installs on Intel Macs.
+- Every platform builds on every push and pull request, macOS included.
+
 ## 1.12.1
 
 - Build and publish Linux arm64 (`gn-cli-linux-arm64`) and Windows arm64

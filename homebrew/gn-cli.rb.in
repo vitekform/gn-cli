@@ -15,9 +15,7 @@ class GnCli < Formula
   license :cannot_represent
 
   on_macos do
-    # CI only builds an Apple Silicon binary.
-    depends_on arch: :arm64
-
+    # One universal binary (Apple Silicon and Intel), also published as gn-cli-macos-x64.
     url "https://rsys.ganamaga.me/gn-cli/public/v/@VERSION@/gn-cli-macos-arm64"
     sha256 "@SHA256_MACOS_ARM64@"
   end

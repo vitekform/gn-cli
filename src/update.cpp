@@ -35,12 +35,26 @@ const char* platform_file() {
     return "gn-cli-windows-arm64.exe";
 #elif defined(_WIN32) && (defined(_M_X64) || defined(__x86_64__))
     return "gn-cli-windows-x64.exe";
+#elif defined(_WIN32) && (defined(_M_IX86) || defined(__i386__))
+    return "gn-cli-windows-x86.exe";
 #elif defined(__APPLE__) && defined(__aarch64__)
     return "gn-cli-macos-arm64";
+#elif defined(__APPLE__) && defined(__x86_64__)
+    // The macOS build is universal; it is published under both names.
+    return "gn-cli-macos-x64";
 #elif defined(__linux__) && defined(__aarch64__)
     return "gn-cli-linux-arm64";
 #elif defined(__linux__) && defined(__x86_64__)
     return "gn-cli-linux-x64";
+#elif defined(__linux__) && defined(__arm__) && defined(__ARM_PCS_VFP)
+    // Debian/Ubuntu armhf: ARMv7 with hardware floating point (32-bit Raspberry Pi OS etc.).
+    return "gn-cli-linux-armv7";
+#elif defined(__linux__) && defined(__riscv) && __riscv_xlen == 64
+    return "gn-cli-linux-riscv64";
+#elif defined(__linux__) && defined(__powerpc64__) && defined(__LITTLE_ENDIAN__)
+    return "gn-cli-linux-ppc64le";
+#elif defined(__linux__) && defined(__s390x__)
+    return "gn-cli-linux-s390x";
 #else
     return nullptr;
 #endif
