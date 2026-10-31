@@ -23,8 +23,9 @@ def manifest(release, require_complete=True):
             raise ValueError('Duplicate platform: ' + key)
         seen.add(key)
         variants.append(dict(key=key, selection=dict(os=os_name, architecture=architecture), files=[name], defaultFile=name))
-    if require_complete and not {'linux-x64', 'windows-x64'} <= seen:
-        raise ValueError('Missing Linux x64 or Windows x64 build')
+    required = {'linux-x64', 'linux-arm64', 'windows-x64', 'windows-arm64'}
+    if require_complete and not required <= seen:
+        raise ValueError('Missing build(s): ' + ', '.join(sorted(required - seen)))
     if not variants:
         raise ValueError('No CLI binaries supplied')
     return dict(variants=variants)

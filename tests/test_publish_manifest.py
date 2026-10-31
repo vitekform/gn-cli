@@ -13,15 +13,16 @@ def release(*names):
 
 class PublishManifestTest(unittest.TestCase):
     def test_complete_manifest_keeps_platform_defaults_separate(self):
-        names=['gn-cli-linux-x64','gn-cli-windows-x64.exe','gn-cli-macos-arm64']
+        names=['gn-cli-linux-x64','gn-cli-linux-arm64','gn-cli-windows-x64.exe','gn-cli-windows-arm64.exe','gn-cli-macos-arm64']
         result=module.manifest(release(*names))['variants']
         self.assertEqual(names,[v['defaultFile'] for v in result])
-        self.assertEqual([{'os':'linux','architecture':'x64'}, {'os':'windows','architecture':'x64'}, {'os':'macos','architecture':'arm64'}], [v['selection'] for v in result])
+        self.assertEqual([{'os':'linux','architecture':'x64'}, {'os':'linux','architecture':'arm64'}, {'os':'windows','architecture':'x64'}, {'os':'windows','architecture':'arm64'}, {'os':'macos','architecture':'arm64'}], [v['selection'] for v in result])
         self.assertTrue(all(v['files']==[v['defaultFile']] for v in result))
 
     def test_incomplete_ambiguous_duplicate_and_unfinished_fail(self):
-        cases=[release('gn-cli-linux-x64'), release('gn-cli'), release('gn-cli-linux-x64','gn-cli-linux-x64'), release('gn-cli-windows-x64')]
-        unfinished=release('gn-cli-linux-x64','gn-cli-windows-x64.exe')
+        cases=[release('gn-cli-linux-x64'), release('gn-cli'), release('gn-cli-linux-x64','gn-cli-linux-x64'), release('gn-cli-windows-x64'),
+               release('gn-cli-linux-x64','gn-cli-windows-x64.exe'), release('gn-cli-linux-arm64.exe'), release('gn-cli-windows-arm64')]
+        unfinished=release('gn-cli-linux-x64','gn-cli-linux-arm64','gn-cli-windows-x64.exe','gn-cli-windows-arm64.exe')
         unfinished['files'][1]['status']='UPLOADING'
         cases.append(unfinished)
         for case in cases:

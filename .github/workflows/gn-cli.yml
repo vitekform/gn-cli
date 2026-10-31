@@ -1,6 +1,6 @@
 # =============================================================================
-# gn-cli.yml — build the gn-cli command-line client for Linux, macOS
-# and Windows.
+# gn-cli.yml — build the gn-cli command-line client for Linux (x64 and
+# arm64), macOS (arm64) and Windows (x64 and arm64).
 #
 # Runs on GitHub-hosted runners: the CLI needs neither the loopback registry
 # nor the production .env, so it has no business queueing on gn_wkst. Pull
@@ -9,7 +9,7 @@
 # macOS runners bill at 10x the Linux rate, so the macOS build only runs when
 # the commit message contains [macos] (case-insensitive; for pull requests the
 # PR head commit is checked), when a gn-cli-v* tag is pushed (a release must
-# ship all three binaries), or when workflow_dispatch is run with macos: true
+# ship every binary), or when workflow_dispatch is run with macos: true
 # (or with publish: true from a gn-cli-v* tag).
 #
 # Binaries go to the release system (rsys.ganamaga.me, project gn-cli), not to
@@ -44,13 +44,18 @@
 # A stable gn-cli-v* tag then also updates the Homebrew tap vitekform/homebrew-tap
 # (the homebrew job; needs the secret HOMEBREW_TAP_DEPLOY_KEY_B64, see there).
 #
+# The arm64 legs run natively on GitHub's arm64 runners (ubuntu-24.04-arm,
+# windows-11-arm), which are free for public repositories, so there is no
+# cross-compiling and the smoke test runs the real binary.
+#
 # Dependencies per platform:
 #   Linux    system libcurl (OpenSSL) and nlohmann-json from apt. The binary
 #            links libcurl dynamically, so the target needs libcurl4 installed
 #            (it is on any desktop Ubuntu/Debian).
 #   macOS    the libcurl in the SDK; nlohmann-json is fetched by CMake.
 #   Windows  curl (Schannel, so no OpenSSL) and nlohmann-json from the
-#            runner's vcpkg, linked statically: one self-contained .exe.
+#            runner's vcpkg (x64-/arm64-windows-static), linked statically:
+#            one self-contained .exe.
 # =============================================================================
 
 name: gn-cli
@@ -131,15 +136,17 @@ jobs:
               ;;
             workflow_dispatch)
               [ "$DISPATCH_MACOS" = true ] && macos=true
-              # Publishing a tagged release still has to ship all three binaries.
+              # Publishing a tagged release still has to ship every binary.
               [ "$DISPATCH_PUBLISH" = true ] && [[ "$REF" == refs/tags/gn-cli-v* ]] && macos=true
               ;;
           esac
           echo "macOS build: $macos"
 
           matrix='[
-            {"name": "linux-x64",   "os": "ubuntu-24.04",   "exe": "gn-cli"},
-            {"name": "windows-x64", "os": "windows-latest", "exe": "gn-cli.exe"}
+            {"name": "linux-x64",     "os": "ubuntu-24.04",     "exe": "gn-cli"},
+            {"name": "linux-arm64",   "os": "ubuntu-24.04-arm", "exe": "gn-cli"},
+            {"name": "windows-x64",   "os": "windows-latest",   "exe": "gn-cli.exe", "arch": "x64"},
+            {"name": "windows-arm64", "os": "windows-11-arm",   "exe": "gn-cli.exe", "arch": "arm64"}
           ]'
           if [ "$macos" = true ]; then
             matrix=$(jq '. + [{"name": "macos-arm64", "os": "macos-latest", "exe": "gn-cli"}]' <<<"$matrix")
@@ -204,7 +211,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/vcpkg-cache
-          key: vcpkg-x64-windows-static-${{ hashFiles('.github/workflows/gn-cli.yml') }}
+          key: vcpkg-${{ matrix.arch }}-windows-static-${{ hashFiles('.github/workflows/gn-cli.yml') }}
 
       - name: install dependencies (Windows)
         if: runner.os == 'Windows'
@@ -212,15 +219,26 @@ jobs:
           VCPKG_DEFAULT_BINARY_CACHE: ${{ runner.temp }}/vcpkg-cache
         run: |
           mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
-          "$(cygpath -u "$VCPKG_INSTALLATION_ROOT")/vcpkg" install curl nlohmann-json --triplet x64-windows-static
+          # The windows-latest image ships vcpkg; fall back to a fresh one where an image doesn't.
+          if [ -z "${VCPKG_INSTALLATION_ROOT:-}" ] || [ ! -e "$VCPKG_INSTALLATION_ROOT/vcpkg.exe" ]; then
+            root="$RUNNER_TEMP/vcpkg"
+            git clone --depth 1 https://github.com/microsoft/vcpkg.git "$root"
+            cmd //c "$(cygpath -w "$root/bootstrap-vcpkg.bat")" -disableMetrics
+            VCPKG_INSTALLATION_ROOT="$(cygpath -w "$root")"
+            echo "VCPKG_INSTALLATION_ROOT=$VCPKG_INSTALLATION_ROOT" >> "$GITHUB_ENV"
+          fi
+          "$(cygpath -u "$VCPKG_INSTALLATION_ROOT")/vcpkg" install curl nlohmann-json --triplet ${{ matrix.arch }}-windows-static
 
       - name: configure
         run: |
           args=(-S . -B build -DCMAKE_BUILD_TYPE=Release)
           if [ "$RUNNER_OS" = Windows ]; then
+            # -A picks the Visual Studio target platform explicitly (x64 or ARM64).
+            platform=x64; [ "${{ matrix.arch }}" = arm64 ] && platform=ARM64
             args+=(
+              -A "$platform"
               "-DCMAKE_TOOLCHAIN_FILE=$(cygpath -m "$VCPKG_INSTALLATION_ROOT")/scripts/buildsystems/vcpkg.cmake"
-              -DVCPKG_TARGET_TRIPLET=x64-windows-static
+              -DVCPKG_TARGET_TRIPLET=${{ matrix.arch }}-windows-static
               -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
             )
           fi
@@ -437,16 +455,20 @@ jobs:
           }
           macos=$(sha gn-cli-macos-arm64)
           linux=$(sha gn-cli-linux-x64)
+          linux_arm=$(sha gn-cli-linux-arm64)
           mkdir -p tap/Formula
           sed -e "s/@VERSION@/$VERSION/g" \
               -e "s/@SHA256_MACOS_ARM64@/$macos/g" \
               -e "s/@SHA256_LINUX_X64@/$linux/g" \
+              -e "s/@SHA256_LINUX_ARM64@/$linux_arm/g" \
               source/homebrew/gn-cli.rb.in > tap/Formula/gn-cli.rb
           # The tap's own licence, at its root where GitHub shows it.
           cp source/homebrew/LICENSE tap/LICENSE
           ! grep -n '@[A-Z0-9_]*@' tap/Formula/gn-cli.rb || { echo "::error::unfilled placeholder"; exit 1; }
           # The sha256 check is the point; make sure brew's URLs actually resolve too.
-          curl -fsSIL --retry 3 -o /dev/null "https://rsys.ganamaga.me/gn-cli/public/v/$VERSION/gn-cli-linux-x64"
+          for f in gn-cli-linux-x64 gn-cli-linux-arm64 gn-cli-macos-arm64; do
+            curl -fsSIL --retry 3 -o /dev/null "https://rsys.ganamaga.me/gn-cli/public/v/$VERSION/$f"
+          done
 
       # Install the rendered formula with the runner's own Homebrew, from a throwaway local tap,
       # and run its test block: a formula that can't install never reaches the real tap.

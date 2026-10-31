@@ -710,7 +710,7 @@ stale when commands change.
 
 ## Installing
 
-With Homebrew (macOS on Apple Silicon, Linux x64):
+With Homebrew (macOS on Apple Silicon, Linux x64 and arm64):
 
 ```
 brew install vitekform/tap/gn-cli
@@ -746,7 +746,8 @@ cmake -S . -B build && cmake --build build -j
 
 On Windows, take curl from vcpkg (see `.github/workflows/gn-cli.yml`).
 
-CI builds and tests Linux x64 and Windows x64 on pushes and pull requests.
+CI builds and tests Linux x64, Linux arm64, Windows x64 and Windows arm64 on
+pushes and pull requests (the arm64 legs run natively on GitHub's arm64 runners).
 macOS arm64 joins tagged releases, commits containing `[macos]`, and manual
 runs with `macos: true`. Pull requests and manual runs without `publish: true`
 do not publish. See [CONTRIBUTING.md](CONTRIBUTING.md) for local tests.

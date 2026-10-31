@@ -31,10 +31,14 @@ constexpr long kCheckEverySeconds = 24 * 3600;
 
 // The release file built for this platform (see the build matrix in .github/workflows/gn-cli.yml).
 const char* platform_file() {
-#if defined(_WIN32) && (defined(_M_X64) || defined(__x86_64__))
+#if defined(_WIN32) && (defined(_M_ARM64) || defined(__aarch64__))
+    return "gn-cli-windows-arm64.exe";
+#elif defined(_WIN32) && (defined(_M_X64) || defined(__x86_64__))
     return "gn-cli-windows-x64.exe";
 #elif defined(__APPLE__) && defined(__aarch64__)
     return "gn-cli-macos-arm64";
+#elif defined(__linux__) && defined(__aarch64__)
+    return "gn-cli-linux-arm64";
 #elif defined(__linux__) && defined(__x86_64__)
     return "gn-cli-linux-x64";
 #else

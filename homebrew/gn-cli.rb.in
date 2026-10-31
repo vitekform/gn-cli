@@ -23,11 +23,15 @@ class GnCli < Formula
   end
 
   on_linux do
-    # The Linux binary links the system libcurl (libcurl4) dynamically.
-    depends_on arch: :x86_64
-
-    url "https://rsys.ganamaga.me/gn-cli/public/v/@VERSION@/gn-cli-linux-x64"
-    sha256 "@SHA256_LINUX_X64@"
+    # The Linux binaries link the system libcurl (libcurl4) dynamically.
+    on_intel do
+      url "https://rsys.ganamaga.me/gn-cli/public/v/@VERSION@/gn-cli-linux-x64"
+      sha256 "@SHA256_LINUX_X64@"
+    end
+    on_arm do
+      url "https://rsys.ganamaga.me/gn-cli/public/v/@VERSION@/gn-cli-linux-arm64"
+      sha256 "@SHA256_LINUX_ARM64@"
+    end
   end
 
   def install
