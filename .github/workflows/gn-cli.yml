@@ -6,11 +6,8 @@
 # nor the production .env, so it has no business queueing on gn_wkst. Pull
 # requests only build and smoke-test; they publish nothing and receive no publishing credentials.
 #
-# macOS runners bill at 10x the Linux rate, so the macOS build only runs when
-# the commit message contains [macos] (case-insensitive; for pull requests the
-# PR head commit is checked), when a gn-cli-v* tag is pushed (a release must
-# ship every binary), or when workflow_dispatch is run with macos: true
-# (or with publish: true from a gn-cli-v* tag).
+# Every platform builds on every run. The repository is public, so GitHub's
+# standard runners (macOS and the arm64 ones included) cost nothing.
 #
 # Binaries go to the release system (rsys.ganamaga.me, project gn-cli), not to
 # workflow artifacts:
@@ -67,10 +64,6 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
-      macos:
-        description: Also build the macOS binary
-        type: boolean
-        default: false
       publish:
         description: Also publish the binaries to rsys.ganamaga.me (a prerelease, or the release when run from a gn-cli-v* tag)
         type: boolean
@@ -90,68 +83,23 @@ env:
   GN_ACCEPT_TERMS: "1"
 
 jobs:
-  # Decides whether the macOS leg joins the matrix. A job-level `if` can't see
-  # `matrix`, and a step-level one would still pay for booting the macOS VM.
+  # Decides whether, and as which version, this run publishes.
   plan:
     name: plan
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
-      matrix: ${{ steps.plan.outputs.matrix }}
       publish: ${{ steps.release.outputs.publish }}
       version: ${{ steps.release.outputs.version }}
       prerelease: ${{ steps.release.outputs.prerelease }}
     steps:
-      # Pull request payloads don't carry the head commit message; pushes need
-      # CMakeLists.txt for the dev version.
+      # Pushes need CMakeLists.txt for the dev version.
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 1
           sparse-checkout: CMakeLists.txt
           sparse-checkout-cone-mode: false
-
-      - name: plan
-        id: plan
-        env:
-          EVENT: ${{ github.event_name }}
-          REF: ${{ github.ref }}
-          PUSH_MESSAGE: ${{ github.event.head_commit.message }}
-          DISPATCH_MACOS: ${{ inputs.macos }}
-          DISPATCH_PUBLISH: ${{ inputs.publish }}
-        run: |
-          macos=false
-          case "$EVENT" in
-            push)
-              if [[ "$REF" == refs/tags/gn-cli-v* ]]; then
-                macos=true
-              elif grep -qiF '[macos]' <<<"$PUSH_MESSAGE"; then
-                macos=true
-              fi
-              ;;
-            pull_request)
-              if git log -1 --format=%B | grep -qiF '[macos]'; then
-                macos=true
-              fi
-              ;;
-            workflow_dispatch)
-              [ "$DISPATCH_MACOS" = true ] && macos=true
-              # Publishing a tagged release still has to ship every binary.
-              [ "$DISPATCH_PUBLISH" = true ] && [[ "$REF" == refs/tags/gn-cli-v* ]] && macos=true
-              ;;
-          esac
-          echo "macOS build: $macos"
-
-          matrix='[
-            {"name": "linux-x64",     "os": "ubuntu-24.04",     "exe": "gn-cli"},
-            {"name": "linux-arm64",   "os": "ubuntu-24.04-arm", "exe": "gn-cli"},
-            {"name": "windows-x64",   "os": "windows-latest",   "exe": "gn-cli.exe", "arch": "x64"},
-            {"name": "windows-arm64", "os": "windows-11-arm",   "exe": "gn-cli.exe", "arch": "arm64"}
-          ]'
-          if [ "$macos" = true ]; then
-            matrix=$(jq '. + [{"name": "macos-arm64", "os": "macos-latest", "exe": "gn-cli"}]' <<<"$matrix")
-          fi
-          echo "matrix=$(jq -c '{include: .}' <<<"$matrix")" >> "$GITHUB_OUTPUT"
 
       # Which rsys release, if any, this run publishes.
       - name: release
@@ -192,7 +140,13 @@ jobs:
     timeout-minutes: 30
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+      matrix:
+        include:
+          - { name: linux-x64,     os: ubuntu-24.04,     exe: gn-cli }
+          - { name: linux-arm64,   os: ubuntu-24.04-arm, exe: gn-cli }
+          - { name: macos-arm64,   os: macos-latest,     exe: gn-cli }
+          - { name: windows-x64,   os: windows-latest,   exe: gn-cli.exe, arch: x64 }
+          - { name: windows-arm64, os: windows-11-arm,   exe: gn-cli.exe, arch: arm64 }
     defaults:
       run:
         shell: bash

@@ -23,7 +23,7 @@ def manifest(release, require_complete=True):
             raise ValueError('Duplicate platform: ' + key)
         seen.add(key)
         variants.append(dict(key=key, selection=dict(os=os_name, architecture=architecture), files=[name], defaultFile=name))
-    required = {'linux-x64', 'linux-arm64', 'windows-x64', 'windows-arm64'}
+    required = {'linux-x64', 'linux-arm64', 'macos-arm64', 'windows-x64', 'windows-arm64'}
     if require_complete and not required <= seen:
         raise ValueError('Missing build(s): ' + ', '.join(sorted(required - seen)))
     if not variants:
