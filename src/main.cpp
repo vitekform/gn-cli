@@ -172,11 +172,6 @@ void print_help() {
               << "  " << green("comics") << " [words]              Search comics (--tag, --author, --page, --limit)\n"
               << "  " << green("comics show") << " <uid>  /  " << green("comics get") << " <uid> [-o dir]   Details; every page (resumable)\n"
               << "  " << green("comics tags") << " / " << green("authors") << " [words]\n\n"
-              << bold("KHK applications") << " " << dim("(the khkAdmin permission)") << "\n"
-              << "  " << green("khk ls") << " [pending|approved|rejected]  Membership applications\n"
-              << "  " << green("khk show") << " <id>  /  " << green("khk pdf") << " <id> [-o file]\n"
-              << "  " << green("khk accept") << " <id>              Publish on the KHK website and email the applicant (asks)\n"
-              << "  " << green("khk reject") << " <id>  /  " << green("khk pending") << " <id>   Change only the status\n\n"
               << bold("Kathars") << " " << dim("(the Minecraft network; staff and punishments are public)") << "\n"
               << "  " << green("kathars staff") << "               The staff list, by group\n"
               << "  " << green("kathars punishments") << " [player]  Bans, mutes and the rest, active first\n"
@@ -449,9 +444,6 @@ const std::vector<Group>& groups() {
          {{{"search", "ls"}, comics_search}, {{"show"}, comics_show}, {{"get", "download"}, comics_get},
           {{"tags"}, comics_tags}, {{"authors"}, comics_authors}},
          comics_search},
-        {{"khk"},
-         {{{"ls", "list"}, khk_list}, {{"show"}, khk_show}, {{"pdf"}, khk_pdf}, {{"accept", "approve"}, khk_accept},
-          {{"reject"}, khk_reject}, {{"pending"}, khk_pending}}},
         {{"kathars"},
          {{{"staff"}, kathars_staff}, {{"punishments", "bans"}, kathars_punishments}, {{"add-member"}, kathars_add_member},
           {{"edit-member"}, kathars_edit_member}, {{"rm-member"}, kathars_remove_member}, {{"add-group"}, kathars_add_group},
@@ -552,7 +544,7 @@ std::vector<std::string> complete(const std::vector<std::string>& before, const 
         else if (prev == "--expires") out = {"1h", "24h", "7d", "30d", "90d", "1y", "never"};
         else if (prev == "--scope" || prev == "-s")
             out = {"account:read", "credits:read", "passkeys:read", "api-tokens:read", "s3:read", "s3:write",
-                   "s3:share", "tmp:read", "tmp:write", "files:read", "files:write", "chat:read", "chat:write", "api-tokens:write", "imagen:read", "imagen:write", "tts", "breeze:read", "breeze:write", "smarthome:read", "smarthome:write", "kathars:admin", "khk:admin", "booru:read", "comics:read", "roleplay:read", "roleplay:write", "vault", "rsys:read", "rsys:publish", "rsys:admin", "rsys:maven", "bakalink:read", "bakalink:manage"};
+                   "s3:share", "tmp:read", "tmp:write", "files:read", "files:write", "chat:read", "chat:write", "api-tokens:write", "imagen:read", "imagen:write", "tts", "breeze:read", "breeze:write", "smarthome:read", "smarthome:write", "kathars:admin", "booru:read", "comics:read", "roleplay:read", "roleplay:write", "vault", "rsys:read", "rsys:publish", "rsys:admin", "rsys:maven", "bakalink:read", "bakalink:manage"};
     } else if (!current.empty() && current[0] == '-') {
         for (const auto& o : kOptions) out.push_back(o.name);
     } else {

@@ -225,12 +225,6 @@ int kathars_add_group(const Context& ctx);
 int kathars_edit_group(const Context& ctx);
 int kathars_remove_group(const Context& ctx);
 
-int khk_list(const Context& ctx);
-int khk_show(const Context& ctx);
-int khk_pdf(const Context& ctx);
-int khk_accept(const Context& ctx);
-int khk_reject(const Context& ctx);
-int khk_pending(const Context& ctx);
 
 int booru_search(const Context& ctx);
 int booru_tags(const Context& ctx);

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.13.1
+
+- Remove `gn khk`. KHK's membership applications moved off ganamaga.me to their own service
+  with its own accounts, so its commands, the `khk:admin` token scope and the `khkAdmin`
+  permission id reach nothing there any more.
+
 ## 1.13.0
 
 - New builds: Linux armv7 (`gn-cli-linux-armv7`, 32-bit Raspberry Pi OS and other

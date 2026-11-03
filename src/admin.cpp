@@ -14,7 +14,7 @@ const std::string kAdmin = "/api/v2/admin";
 
 // The ids AIAdminAPI.KNOWN_PERMISSIONS accepts, without the legacy page names.
 const char* kPermissions[] = {"aiChatBasic", "aiRoleplayBasic", "aiRoleplayFull", "aiImagen", "aiTTS", "s3", "smartHome",
-                              "gelbooru", "gelbooruAdmin", "aiAdmin", "openAIAPI", "khkAdmin", "katharsAdmin", "gallery",
+                              "gelbooru", "gelbooruAdmin", "aiAdmin", "openAIAPI", "katharsAdmin", "gallery",
                               "release_system", "game_player"};
 
 std::optional<Auth> admin_session(const Context& ctx) {

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(gn_cli VERSION 1.13.0 LANGUAGES CXX)
+project(gn_cli VERSION 1.13.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -51,7 +51,6 @@ add_executable(gn-cli
   src/stock.cpp
   src/home.cpp
   src/kathars.cpp
-  src/khk.cpp
   src/booru.cpp
   src/roleplay.cpp
   src/vault.cpp

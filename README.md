@@ -185,7 +185,7 @@ that fits only one account.
 ```
 gn admin users [filter]                    # everyone: credits and access
 gn admin user bob                          # one account with its credits and usage
-gn admin create-user khk@x.cz khkAdmin     # an account with only these permissions (asks for a password)
+gn admin create-user mc@x.cz katharsAdmin  # an account with only these permissions (asks for a password)
 gn admin perms bob                         # show; then: set s3,aiChatBasic | role
 gn admin password bob --password-stdin     # root only; signs their sessions out
 gn admin credits bob add 5                 # or sub 1, set 10; no action shows the balance
@@ -233,23 +233,6 @@ gn comics tags sci / gn comics authors zed
 ```
 
 Uploading, deleting and the live rule34 search stay in the web app.
-
-## KHK applications
-
-Membership applications to KHK Pardubice, for `khkAdmin` accounts (CLI token:
-`khk:admin`):
-
-```
-gn khk ls                 # all; or ls pending / approved / rejected
-gn khk show 12            # everything the applicant filled in, with a map link
-gn khk pdf 12             # application-12.pdf (-o to name it)
-gn khk accept 12          # publishes them on the KHK website and emails them; asks first
-gn khk reject 12          # status only (asks); khk pending 12 puts it back
-```
-
-Accepting an approved application again only republishes it, without a second
-email. Rejecting an approved one leaves the member on the website; remove the
-post there.
 
 ## Kathars
 
@@ -670,7 +653,6 @@ scopes list, and the server refuses everything else with `403 insufficient_scope
 | `roleplay:write` | start, delete and talk in roleplay chats, regenerate replies (spends credits) |
 | `booru:read` | `GET /api/v2/gelbooru/posts`, `…/posts/{id}`, previews, tag suggestions (needs gelbooru) |
 | `comics:read` | `GET /api/v2/comics/**`: search, details and page images (needs gelbooru) |
-| `khk:admin` | `GET /api/khk/admin/*`: list, read, approve and reject KHK applications (needs khkAdmin) |
 | `kathars:admin` | `/api/kathars/admin/staff/**`: edit the Kathars staff list (needs katharsAdmin) |
 | `rsys:read` | every `GET /api/v2/rsys/…`: projects, releases, downloads (needs the release_system permission too) |
 | `rsys:publish` | create, edit, publish and yank releases; upload, delete and pick files; replace variant compatibility — what a CI job needs, with `rsys:read` |
