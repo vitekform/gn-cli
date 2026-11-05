@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.15.2
+
+- The 1.15.1 changes, released: 1.15.1's ppc64le build hung on a stalled Ubuntu mirror and
+  was never published. The cross builds now time out and retry a stalled apt download.
+
 ## 1.15.1
 
 - `gn <command> --help` for logs, memory, web, tools/tool, chat, files, me and credits adds a
