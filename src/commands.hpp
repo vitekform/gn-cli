@@ -289,3 +289,8 @@ void update_cleanup();
 std::string update_notice(const Context& ctx);
 
 }  // namespace commands
+
+namespace help {
+// The longer help below a command's lines in `gn <command> --help` (src/helpdetails.cpp), or null.
+const char* details(const std::string& command);
+}  // namespace help

@@ -310,8 +310,9 @@ void print_help(const std::string& topic = "") {
     if (!topic.empty() && topic != "help") {
         std::string part = topic_help(full, topic);
         if (!part.empty()) {
-            std::cout << part << '\n'
-                      << term::dim("Global options (--json, --token, --chat <id>...) and every command: gn --help") << '\n';
+            std::cout << part << '\n';
+            if (const char* more = help::details(topic)) std::cout << more << "\n\n";
+            std::cout << term::dim("--json (raw JSON) works on most commands. Every command: gn --help") << '\n';
             return;
         }
     }

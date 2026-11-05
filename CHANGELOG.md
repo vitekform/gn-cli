@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.15.1
+
+- `gn <command> --help` for logs, memory, web, tools/tool, chat, files, me and credits adds a
+  Details block: every subcommand with its parameters and defaults, the shape of the output
+  (field names), and examples that work as written. `gn logs --help` includes the `where`
+  query language and says that a search looks back one hour unless told otherwise. Each page
+  stays under 4,000 characters, so the AI sandbox shows it whole.
+
 ## 1.15.0
 
 - `gn <command> --help` and `gn help <command>` show only that command's lines, its options and

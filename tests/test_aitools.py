@@ -162,13 +162,25 @@ class AiToolsTest(unittest.TestCase):
                 self.assertIn('gn tools logs_search', r.stdout)
                 self.assertIn('AI tools', r.stdout)  # the section heading
                 self.assertNotIn('rsys', r.stdout)
-                self.assertLess(len(r.stdout), 1000)
+                self.assertLess(len(r.stdout), 4000)
         # tools is not tool, and an unknown word gets everything.
-        r = self.gn('tools', '--help')
-        self.assertIn('tools [name]', r.stdout)
-        self.assertNotIn('tool <name>', r.stdout)
+        lines = self.gn('tools', '--help').stdout.split('Details')[0]
+        self.assertIn('tools [name]', lines)
+        self.assertNotIn('tool <name>', lines)
         self.assertEqual(self.gn('nope', '--help').stdout, full.stdout)
         self.assertFalse(self.server.calls)  # help never touches the server
+
+    def test_command_help_has_details_that_fit_the_sandbox(self):
+        # The AI sandbox cuts output at 4,000 characters; a help page has to survive it whole.
+        for command in ('logs', 'memory', 'web', 'tools', 'tool', 'chat', 'files', 'me', 'credits'):
+            with self.subTest(command=command):
+                r = self.gn(command, '--help')
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertIn('Details', r.stdout)
+                self.assertLess(len(r.stdout), 4000)
+        logs = self.gn('logs', 'search', '--help').stdout
+        for needed in ('ONE HOUR', "actor = '252'", 'group_by', 'before=', 'request_id=', 'LIKE'):
+            self.assertIn(needed, logs)
 
 
 if __name__ == '__main__':
