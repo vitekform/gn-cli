@@ -51,6 +51,9 @@ history (kept in the config folder), Ctrl-W/U/K to delete, Ctrl-L to clear, and
 Tab completes commands, subcommands, options and local file names (twice lists
 them). On Windows the console's own editing applies instead.
 
+`gn --help` lists everything; `gn <command> --help` (or `gn help <command>`)
+shows just that command's lines, e.g. `gn logs --help`.
+
 Options given to `gn` itself (`--token`, `--api-url`, `--no-color`, …) apply to
 every command in the shell; quote arguments with spaces like in a shell.
 

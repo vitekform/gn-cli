@@ -151,6 +151,25 @@ class AiToolsTest(unittest.TestCase):
                 self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
         self.assertEqual(len(self.server.calls), before)
 
+    def test_command_help_is_that_command_only(self):
+        full = self.gn('--help')
+        self.assertEqual(full.returncode, 0)
+        for argv in (('logs', '--help'), ('logs', 'search', '--help'), ('help', 'logs')):
+            with self.subTest(argv=argv):
+                r = self.gn(*argv)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertIn('logs search|count|trace|sources|booru', r.stdout)
+                self.assertIn('gn tools logs_search', r.stdout)
+                self.assertIn('AI tools', r.stdout)  # the section heading
+                self.assertNotIn('rsys', r.stdout)
+                self.assertLess(len(r.stdout), 1000)
+        # tools is not tool, and an unknown word gets everything.
+        r = self.gn('tools', '--help')
+        self.assertIn('tools [name]', r.stdout)
+        self.assertNotIn('tool <name>', r.stdout)
+        self.assertEqual(self.gn('nope', '--help').stdout, full.stdout)
+        self.assertFalse(self.server.calls)  # help never touches the server
+
 
 if __name__ == '__main__':
     unittest.main(argv=[__file__, *unittest_args])

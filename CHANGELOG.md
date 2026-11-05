@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.15.0
+
+- `gn <command> --help` and `gn help <command>` show only that command's lines, its options and
+  its section heading (`gn logs --help`: about 300 characters instead of the whole 15,000-character
+  help). An unknown word, and `gn --help` alone, still print everything. In the AI sandbox, whose
+  output is cut to a few thousand characters, the whole help used to lose its middle.
+- The `logs` help points at `gn tools logs_search` for the parameters and the query language.
+
 ## 1.14.0
 
 - `gn tools`, `gn tool <name> key=value…`: the AI's read-only tools from the terminal, the same

@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -19,10 +20,11 @@ namespace fs = std::filesystem;
 
 namespace {
 
-void print_help() {
+std::string full_help() {
+    std::ostringstream out;
     using namespace term;
     const auto& G = g();
-    std::cout << bold(cyan("gn-cli")) << ' ' << dim(std::string("v") + GN_CLI_VERSION) << ' ' << dim(G.dash) << ' '
+    out << bold(cyan("gn-cli")) << ' ' << dim(std::string("v") + GN_CLI_VERSION) << ' ' << dim(G.dash) << ' '
               << "command-line client for the nextgen API\n\n"
               << bold("Usage") << "\n"
               << "  gn-cli [options] <command> [command options]\n"
@@ -53,6 +55,7 @@ void print_help() {
               << "                      Run one; values are JSON when they parse (20, true, [\"a\"])\n"
               << "  " << green("logs") << " search|count|trace|sources|booru [key=value...]\n"
               << "                      The central log (admin.logs): gn logs search where=\"status >= 500\" limit=20\n"
+              << "                      Parameters and the query language: gn tools logs_search (logs_count, ...)\n"
               << "  " << green("memory") << " list|read <id>|read-chat <id>\n"
               << "                      The AI's memories; chat ones need --chat <id> (or $GN_SANDBOX_CHAT)\n"
               << "  " << green("web") << " search <query>|fetch <url...>|research <query>\n"
@@ -240,6 +243,79 @@ void print_help() {
               << "                        redacted (or GN_DEBUG=1)\n"
               << "  -h, --help            Show this help\n"
               << "  -V, --version         Show the version\n";
+    return out.str();
+}
+
+// The help as plain text, for matching: no colour codes.
+std::string strip_ansi(const std::string& s) {
+    std::string out;
+    out.reserve(s.size());
+    for (std::size_t i = 0; i < s.size(); ++i) {
+        if (s[i] == '\x1b' && i + 1 < s.size() && s[i + 1] == '[') {
+            i += 2;
+            while (i < s.size() && !(s[i] >= '@' && s[i] <= '~')) ++i;
+            continue;
+        }
+        out += s[i];
+    }
+    return out;
+}
+
+// The lines about one command: `gn logs --help` prints the logs lines, their option lines and the
+// heading of their section, instead of all ~15,000 characters (which a terminal scrolls past and
+// the AI sandbox cuts in the middle). Empty when no command starts with the word.
+std::string topic_help(const std::string& full, const std::string& word) {
+    std::istringstream in(full);
+    std::string line, heading, printed_heading, out;
+    bool in_match = false;
+    while (std::getline(in, line)) {
+        std::string plain = strip_ansi(line);
+        if (plain.empty()) {
+            in_match = false;
+            continue;
+        }
+        if (plain[0] != ' ') {
+            heading = line;
+            in_match = false;
+            continue;
+        }
+        bool command_line = plain.size() > 2 && plain[2] != ' ';
+        if (command_line) {
+            std::string rest = plain.substr(2);
+            // "logs search…", "info, me …": the word, then a space, a comma or the end.
+            in_match = rest.rfind(word, 0) == 0 &&
+                       (rest.size() == word.size() || rest[word.size()] == ' ' || rest[word.size()] == ',');
+            if (!in_match) {
+                // A second name on the line: "info, me".
+                auto comma = rest.find(", ");
+                if (comma != std::string::npos && comma < 20) {
+                    std::string second = rest.substr(comma + 2);
+                    in_match = second.rfind(word, 0) == 0 &&
+                               (second.size() == word.size() || second[word.size()] == ' ');
+                }
+            }
+            if (in_match && printed_heading != heading) {
+                out += (out.empty() ? "" : "\n") + heading + '\n';
+                printed_heading = heading;
+            }
+        }
+        if (in_match) out += line + '\n';
+    }
+    return out;
+}
+
+// gn --help: everything. gn <command> --help, gn help <command>: that command's lines.
+void print_help(const std::string& topic = "") {
+    std::string full = full_help();
+    if (!topic.empty() && topic != "help") {
+        std::string part = topic_help(full, topic);
+        if (!part.empty()) {
+            std::cout << part << '\n'
+                      << term::dim("Global options (--json, --token, --chat <id>...) and every command: gn --help") << '\n';
+            return;
+        }
+    }
+    std::cout << full;
 }
 
 int usage_error(const std::string& msg) {
@@ -396,8 +472,8 @@ struct Group {
     Run run = nullptr;      // without subs: the command; with subs: what any other word runs (drop <file>)
 };
 
-int help_command(const commands::Context&) {
-    print_help();
+int help_command(const commands::Context& ctx) {
+    print_help(ctx.args.empty() ? "" : ctx.args[0]);
     return 0;
 }
 
@@ -654,7 +730,7 @@ int dispatch(Invocation& inv) {
         return 0;
     }
     if (inv.help || inv.positional.empty()) {
-        print_help();
+        print_help(inv.positional.empty() ? "" : inv.positional[0]);
         return inv.help ? 0 : 2;
     }
     if (!inv.bad.empty()) return usage_error(inv.bad);
