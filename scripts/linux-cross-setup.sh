@@ -61,15 +61,34 @@ Architectures: $arch
 Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
 EOF
 
+# A mirror that stalls mid-download (seen on azure.archive.ubuntu.com) would otherwise hold apt
+# forever: give up on a silent connection after 30 s, retry each file, and bound every apt run.
+cat > /etc/apt/apt.conf.d/80-gn-cli-retries <<'EOF'
+Acquire::Retries "5";
+Acquire::http::Timeout "30";
+Acquire::https::Timeout "30";
+EOF
+export DEBIAN_FRONTEND=noninteractive
+apt_retry() {
+  local attempt
+  for attempt in 1 2 3; do
+    timeout 300 "$@" && return 0
+    echo "apt attempt $attempt failed or timed out; retrying" >&2
+    dpkg --configure -a || true  # in case the timeout cut an unpack short
+    sleep $((attempt * 10))
+  done
+  return 1
+}
+
 dpkg --add-architecture "$arch"
-apt-get update -q
+apt_retry apt-get update -q
 # libcurl4-openssl-dev isn't co-installable across architectures (each ships its own
 # /usr/bin/curl-config), and the cross build doesn't want the host's anyway.
 host="$(dpkg --print-architecture)"
 if [ "$host" != "$arch" ] && dpkg -s "libcurl4-openssl-dev:$host" >/dev/null 2>&1; then
   DEBIAN_FRONTEND=noninteractive apt-get remove -y -q "libcurl4-openssl-dev:$host"
 fi
-DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
+apt_retry apt-get install -y -q --no-install-recommends \
   "g++-$triplet" "libcurl4-openssl-dev:$arch" "libstdc++6:$arch" nlohmann-json3-dev qemu-user-static binfmt-support
 
 # Multiarch puts the target's dynamic loader and libraries where the binary expects them,

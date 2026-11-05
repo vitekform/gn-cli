@@ -183,6 +183,8 @@ jobs:
 
       - name: install cross toolchain and QEMU (Linux ${{ matrix.cross }})
         if: matrix.cross
+        # Normally under a minute; the script retries a stalled mirror itself.
+        timeout-minutes: 20
         run: |
           sudo scripts/linux-cross-setup.sh "${{ matrix.cross }}"
           triplet="$(scripts/linux-cross-setup.sh --cmake-args "${{ matrix.cross }}" | sed -E 's/.*LIBRARY_ARCHITECTURE=//')"
