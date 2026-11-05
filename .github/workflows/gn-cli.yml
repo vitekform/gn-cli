@@ -244,6 +244,7 @@ jobs:
         run: |
           python3 tests/test_rsys.py --binary build/gn-cli -v
           python3 tests/test_stock_sunset.py --binary build/gn-cli -v
+          python3 tests/test_aitools.py --binary build/gn-cli -v
           python3 tests/test_publish_manifest.py -v
           python3 tests/test_check_binary_arch.py -v
 

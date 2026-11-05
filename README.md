@@ -175,6 +175,29 @@ stderr and only on a terminal, so `gn chat "…" > answer.md` holds just the
 answer; `--reasoning` prints the model's reasoning too. To ask about a word
 that is also a subcommand (`ls`, `show`, `models`), use `gn chat ask …`.
 
+## AI tools
+
+The AI's read-only tools, run from the terminal: the central log, the AI's
+memories, web search. It is the very tool a chat calls, with the same checks
+(the tool's `ai.tools.*` node, `admin.logs` for the log, budgets for the web).
+In the AI sandbox the model uses these instead of carrying the tools around.
+
+```
+gn tools                                   # what you may run here
+gn tools logs_search                       # one tool: what it does, its parameters
+gn tool logs_search where="status >= 500" limit=20   # run one; key=value, values are JSON when they parse
+gn logs search|count|trace|sources|booru key=value…  # the logs_* tools
+gn memory list / read 12 / read-chat 7     # memories; chat ones need --chat <id> or $GN_SANDBOX_CHAT
+gn web search "rust async traits" --limit 3
+gn web fetch https://example.com/a https://example.com/b
+gn web research "state of WebGPU in 2026"
+```
+
+Results are what the model would read, often JSON: pipe them into `jq`. A CLI
+token needs `logs:read`, `memory:read` or `web:search` (web search spends the
+server's web-search budget). New read-only tools on the server show up in
+`gn tools` without a new release.
+
 ## Admin
 
 The admin panel, for accounts with `aiAdmin` (or level 4). Login session only:

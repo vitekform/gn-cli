@@ -47,6 +47,16 @@ void print_help() {
               << "  " << green("passkeys") << " ls|rm <id>  Your passkeys; registering one stays in the browser\n"
               << "  " << green("api-tokens") << " ls|create <name>|revoke <id>|models\n"
               << "                      OpenAI-compatible API keys (openAIAPI permission)\n\n"
+              << bold("AI tools") << " " << dim("(the AI's read-only tools; CLI tokens need logs:read, memory:read or web:search)") << "\n"
+              << "  " << green("tools") << " [name]        What you may run, or one tool's description and parameters\n"
+              << "  " << green("tool") << " <name> [key=value...]\n"
+              << "                      Run one; values are JSON when they parse (20, true, [\"a\"])\n"
+              << "  " << green("logs") << " search|count|trace|sources|booru [key=value...]\n"
+              << "                      The central log (admin.logs): gn logs search where=\"status >= 500\" limit=20\n"
+              << "  " << green("memory") << " list|read <id>|read-chat <id>\n"
+              << "                      The AI's memories; chat ones need --chat <id> (or $GN_SANDBOX_CHAT)\n"
+              << "  " << green("web") << " search <query>|fetch <url...>|research <query>\n"
+              << "                      Web search and page extraction (spends the web-search budget)\n\n"
               << bold("S3 storage") << " " << dim("(needs a login session and the s3 permission)") << "\n"
               << "  " << green("s3 ls") << " [provider [bucket [prefix]]]\n"
               << "                      Providers, a provider's buckets, or a folder's objects\n"
@@ -429,6 +439,14 @@ const std::vector<Group>& groups() {
          {{{"ls", "list"}, api_tokens_list}, {{"create", "new"}, api_tokens_create},
           {{"revoke", "rm", "delete"}, api_tokens_revoke}, {{"models"}, api_tokens_models}}},
         {{"credits"}, {}, commands::credits},
+        {{"tools"}, {}, ai_tools},
+        {{"tool"}, {}, ai_tool},
+        {{"logs"},
+         {{{"search"}, logs_search}, {{"count"}, logs_count}, {{"trace"}, logs_trace}, {{"sources"}, logs_sources},
+          {{"booru"}, logs_booru}}},
+        {{"memory", "memories"},
+         {{{"list", "ls"}, memory_list}, {{"read", "show"}, memory_read}, {{"read-chat"}, memory_read_chat}}},
+        {{"web"}, {{{"search"}, web_search}, {{"fetch", "get"}, web_fetch}, {{"research"}, web_research}}},
         {{"vault"},
          {{{"use"}, vault_use}, {{"ls", "list"}, vault_list}, {{"get", "open"}, vault_get}, {{"hide"}, vault_hide},
           {{"link", "share"}, vault_link}}},

@@ -176,6 +176,21 @@ int api_tokens_create(const Context& ctx);
 int api_tokens_revoke(const Context& ctx);
 int api_tokens_models(const Context& ctx);
 int credits(const Context& ctx);
+
+// AI tools (aitools.cpp)
+int ai_tools(const Context& ctx);
+int ai_tool(const Context& ctx);
+int logs_search(const Context& ctx);
+int logs_count(const Context& ctx);
+int logs_trace(const Context& ctx);
+int logs_sources(const Context& ctx);
+int logs_booru(const Context& ctx);
+int memory_list(const Context& ctx);
+int memory_read(const Context& ctx);
+int memory_read_chat(const Context& ctx);
+int web_search(const Context& ctx);
+int web_fetch(const Context& ctx);
+int web_research(const Context& ctx);
 int passkeys_list(const Context& ctx);
 int passkeys_remove(const Context& ctx);
 

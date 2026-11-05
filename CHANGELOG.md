@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.14.0
+
+- `gn tools`, `gn tool <name> key=value…`: the AI's read-only tools from the terminal, the same
+  ones a chat calls (needs the backend's `/api/v2/ai/tools`). `gn tools <name>` shows a tool's
+  parameters, from the server.
+- Short forms: `gn logs search|count|trace|sources|booru`, `gn memory list|read|read-chat`,
+  `gn web search|fetch|research`. The memory commands run in a chat: `--chat <id>`, or
+  `$GN_SANDBOX_CHAT` in the AI sandbox.
+- CLI token scopes for them: `logs:read`, `memory:read`, `web:search`.
+
 ## 1.13.1
 
 - Remove `gn khk`. KHK's membership applications moved off ganamaga.me to their own service
