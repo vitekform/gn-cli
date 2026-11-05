@@ -223,6 +223,15 @@ jobs:
             args+=("${cross[@]}")
           elif [ "$RUNNER_OS" = macOS ]; then
             args+=("-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0)
+            # No system nlohmann/json here, and FetchContent gives up on the first error (a 504
+            # from github.com failed 1.15.2's first run). Fetch the same pinned archive with
+            # retries, check the same hash, and hand CMake the unpacked source.
+            url="$(sed -nE 's/^ *URL (https:[^ ]+)$/\1/p' CMakeLists.txt)"
+            sha="$(sed -nE 's/^ *URL_HASH SHA256=([0-9a-f]+)$/\1/p' CMakeLists.txt)"
+            curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 -o "$RUNNER_TEMP/json.tar.xz" "$url"
+            echo "$sha  $RUNNER_TEMP/json.tar.xz" | shasum -a 256 -c -
+            mkdir -p "$RUNNER_TEMP/json" && tar -xJf "$RUNNER_TEMP/json.tar.xz" -C "$RUNNER_TEMP/json" --strip-components 1
+            args+=("-DFETCHCONTENT_SOURCE_DIR_JSON=$RUNNER_TEMP/json")
           elif [ "$RUNNER_OS" = Windows ]; then
             # -A picks the Visual Studio target platform explicitly.
             case "${{ matrix.arch }}" in
