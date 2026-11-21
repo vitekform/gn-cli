@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(gn_cli VERSION 1.15.2 LANGUAGES CXX)
+project(gn_cli VERSION 2.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -50,7 +50,6 @@ add_executable(gn-cli
   src/media.cpp
   src/breeze.cpp
   src/admin.cpp
-  src/stock.cpp
   src/home.cpp
   src/kathars.cpp
   src/booru.cpp

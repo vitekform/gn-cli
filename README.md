@@ -361,22 +361,6 @@ account: once pushed they need not be repeated. The permanent timetable is
 replaced whole by `{"hours": […], "lessons": [{"dayOfWeek": 1, "hour": "3", "cycle": "Lichý", "subject": …, "teacher": …, "room": "12", "group": "3.B"}]}`,
 with `dayOfWeek` 1 (Monday) to 7 and `cycle` left out for lessons on every week.
 
-## Markets (sunset)
-
-The Stock system has been sunset. Every `gn stock` command (and the `stocks`
-alias), including former price, score, news, macro, geo and ticker commands,
-now prints:
-
-```text
-Stock system has been sunset
-https://ganamaga.me/blog/stock/sunset
-```
-
-These commands exit with status 1 without authentication, service-terms prompts
-or network requests. With `--json`, they return an object with `error` set to
-`stock_sunset`, plus `message` and `url`. Read
-[why we decided to sunset the system](https://ganamaga.me/blog/stock/sunset).
-
 ## Roleplay
 
 Roleplay chats in the terminal (`aiRoleplayBasic`; paid models spend credits).
@@ -671,7 +655,6 @@ scopes list, and the server refuses everything else with `403 insufficient_scope
 | `tts` | `GET`/`POST /api/v2/tts/voices`, `DELETE …/voices/{id}`, `GET /api/v2/tts/generate` (needs aiTTS) |
 | `breeze:read` | `GET /api/v2/tts/breeze/status`, `…/voices`, `…/voices/{name}`: the Breeze TTS server's state and your Breeze voices (needs aiTTS) |
 | `breeze:write` | `POST /api/v2/tts/breeze/synthesize`, `…/stream`, `…/voices`, `…/load`, `…/unload`, `DELETE …/voices/{name}` (unload needs the admin panels too) |
-| `stock:read` | Retired: the Stock system has been sunset. |
 | `smarthome:read` | `GET /api/v2/smarthome/nodes`, `…/rooms` (needs smartHome) |
 | `smarthome:write` | `POST /api/v2/smarthome/rooms`, `…/nodes/*`: commands to the devices |
 | `vault` | `POST /api/v2/secure-storage/*`: list, extract, hide and share vault files (needs s3, or gallery to read) |

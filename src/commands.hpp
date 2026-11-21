@@ -74,9 +74,7 @@ struct Context {
     std::string seed;             // --seed <n>
     std::string format;           // --format wav|flac|pcm
 
-    // stock
-    std::string period;           // --period 1d|5d|1m|6m|ytd|1y|max…
-    std::string interval;         // --interval auto|1min|…|1month
+    // logs, booru, bakalink, tools
     std::string limit;            // --limit <n>
 
     // booru / comics
@@ -220,8 +218,6 @@ int admin_usage(const Context& ctx);
 int admin_providers(const Context& ctx);
 int admin_models(const Context& ctx);
 int admin_oauth_clients(const Context& ctx);
-
-int stock_sunset(const Context& ctx);
 
 int home_nodes(const Context& ctx);
 int home_rooms(const Context& ctx);

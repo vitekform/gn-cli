@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.0.0
+
+Breaking: the Stock system is gone, on the server and here.
+
+- `gn stock` and `gn stocks` are removed. They had only printed the sunset notice since
+  the Stock system was shut down; now they are unknown commands (exit status 2, like any
+  other). Scripts that checked for the `stock_sunset` error should drop those calls.
+- `--period` and `--interval`, used only by the stock commands, are removed with them.
+- The `stock:read` CLI token scope no longer exists. The server refuses to issue it, and a
+  token created with it keeps its other scopes.
+
 ## 1.15.2
 
 - The 1.15.1 changes, released: 1.15.1's ppc64le build hung on a stalled Ubuntu mirror and

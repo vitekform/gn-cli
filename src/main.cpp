@@ -212,9 +212,6 @@ std::string full_help() {
               << "  " << green("bakalink timetable permanent") << "  /  " << green("permanent push") << " --file <json|->   The permanent timetable\n"
               << "      --account <id|name>   The account, for everything but accounts (or $GN_BAKALINK_ACCOUNT)\n"
               << "      --bakalink-token <t>  The token (or $GN_BAKALINK_TOKEN)\n\n"
-              << bold("Markets (sunset)") << "\n"
-              << "  " << green("stock") << "                       Stock system has been sunset\n"
-              << "      https://ganamaga.me/blog/stock/sunset\n\n"
               << bold("Updating") << "\n"
               << "  " << green("update") << "                      Replace this gn-cli with the newest release (sha256-checked)\n"
               << "      --check               Only say whether there is one (exit 10 if so)\n"
@@ -396,8 +393,6 @@ Invocation parse(const std::vector<std::string>& args, Invocation inv) {
         else if (value("--ref", ctx.ref_audio)) {}
         else if (value("--seed", ctx.seed)) {}
         else if (value("--format", ctx.format)) {}
-        else if (value("--period", ctx.period)) {}
-        else if (value("--interval", ctx.interval)) {}
         else if (value("--limit", ctx.limit)) {}
         else if (value("--page", ctx.page)) {}
         else if (value("--tag", ctx.tag)) {}
@@ -550,7 +545,6 @@ const std::vector<Group>& groups() {
          {{{"nodes", "devices", "ls"}, home_nodes}, {{"rooms"}, home_rooms}, {{"room"}, home_room},
           {{"poll"}, home_poll}, {{"config"}, home_config}, {{"reset"}, home_reset}, {{"fun"}, home_fun}},
          home_nodes},
-        {{"stock", "stocks"}, {}, stock_sunset},
         {{"admin"},
          {{{"users"}, admin_users}, {{"user"}, admin_user}, {{"create-user"}, admin_create_user},
           {{"perms", "permissions"}, admin_perms}, {{"password"}, admin_password}, {{"credits"}, admin_credits},
@@ -609,8 +603,8 @@ constexpr OptionSpec kOptions[] = {
     {"--ttl", true}, {"--max-downloads", true}, {"--zip", false}, {"--check", false}, {"--model", true},
     {"--chat", true}, {"--reasoning", false}, {"--watch", false}, {"--size", true}, {"--negative", true},
     {"--steps", true}, {"--guidance", true}, {"--no-wait", false}, {"--voice", true}, {"--instruction", true},
-    {"--ref", true}, {"--ref-text", true}, {"--seed", true}, {"--format", true}, {"--period", true},
-    {"--interval", true}, {"--limit", true}, {"--page", true}, {"--tag", true}, {"--author", true}, {"--no-ai", false}, {"--as", true}, {"--keyfile", true},
+    {"--ref", true}, {"--ref-text", true}, {"--seed", true}, {"--format", true},
+    {"--limit", true}, {"--page", true}, {"--tag", true}, {"--author", true}, {"--no-ai", false}, {"--as", true}, {"--keyfile", true},
     {"--bakalink-token", true}, {"--account", true}, {"--id", true}, {"--content", true}, {"--content-file", true},
     {"--author-id", true}, {"--kind", true}, {"--at", true}, {"--prune", false}, {"--subject", true}, {"--mark", true},
     {"--weight", true}, {"--caption", true}, {"--teacher", true}, {"--from", true}, {"--to", true}, {"--date", true},
@@ -631,8 +625,6 @@ std::vector<std::string> complete(const std::vector<std::string>& before, const 
     std::string prev = before.empty() ? "" : before.back();
     if (takes_value(prev)) {
         if (prev == "--ttl") out = {"30m", "1h", "3h", "6h", "12h", "24h", "3d", "7d", "1mo"};
-        else if (prev == "--period") out = {"1d", "5d", "1m", "3m", "6m", "ytd", "1y", "5y", "max"};
-        else if (prev == "--interval") out = {"auto", "1min", "5min", "15min", "1hour", "1day", "1week", "1month"};
         else if (prev == "--size") out = {"square", "portrait", "landscape", "tall", "wide"};
         else if (prev == "--kind") out = {"received", "noticeboard"};
         else if (prev == "--format") out = {"wav", "flac", "pcm"};
@@ -754,7 +746,7 @@ int dispatch(Invocation& inv) {
             return handler(ctx);
         };
         // Local notices, terms, licence, help and completions need no service-terms acceptance.
-        static const std::vector<std::string> exempt = {"terms", "license", "completion", "help", "stock"};
+        static const std::vector<std::string> exempt = {"terms", "license", "completion", "help"};
         if (group && !named(exempt, group->names[0]) && !commands::require_terms(ctx)) return 1;
         if (!group) {
             rc = usage_error("unknown command '" + cmd + "'");
