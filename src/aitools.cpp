@@ -8,6 +8,11 @@
 //
 // In the AI sandbox, the VM's gn runs these with the token sandboxd injects; the chat a command
 // belongs to comes from $GN_SANDBOX_CHAT (the memory tools need it), unless --chat names one.
+//
+// `gn character propose` is the one that is not read-only, and not generic: it puts a character
+// draft in front of the user as a review card, inside the reply the AI is generating in that chat
+// (POST /api/v2/ai/chats/{chat}/character-proposals). It creates nothing; the user does, by
+// accepting the card.
 
 #include <algorithm>
 #include <cstdlib>
@@ -70,6 +75,18 @@ bool all_digits(const std::string& s) {
     return true;
 }
 
+// A tool's answer: its result text, or with --json everything the server said.
+int print_result(const Context& ctx, const json& r) {
+    if (ctx.json) {
+        std::cout << r.dump(2) << '\n';
+        return 0;
+    }
+    std::string result = str(r, "result");
+    std::cout << result;
+    if (result.empty() || result.back() != '\n') std::cout << '\n';
+    return 0;
+}
+
 int run_tool(const Context& ctx, const std::string& name, json args) {
     // --limit is a gn option elsewhere; here it is the tool's own limit/count, if it takes one.
     if (!ctx.limit.empty() && !args.contains("limit") && !args.contains("count")) {
@@ -92,14 +109,7 @@ int run_tool(const Context& ctx, const std::string& name, json args) {
     auto auth = authenticate(ctx);
     if (!auth) return 1;
     json r = auth->client.call("POST", path, auth->session(), &args);
-    if (ctx.json) {
-        std::cout << r.dump(2) << '\n';
-        return 0;
-    }
-    std::string result = str(r, "result");
-    std::cout << result;
-    if (result.empty() || result.back() != '\n') std::cout << '\n';
-    return 0;
+    return print_result(ctx, r);
 }
 
 int run_with_key_values(const Context& ctx, const std::string& name, const std::vector<std::string>& words) {
@@ -255,6 +265,49 @@ int web_fetch(const Context& ctx) {
 int web_research(const Context& ctx) {
     if (!need_args(ctx, 1, "gn web research <query...>")) return 2;
     return run_tool(ctx, "research_web", json{{"query", join(ctx.args, " ")}});
+}
+
+// gn character propose name=<name> [field=value…]
+namespace {
+const std::vector<std::string> kCharacterFields = {"name",        "title",    "age",      "gender",
+                                                   "appearance",  "personality", "greeting", "otherInfo"};
+}  // namespace
+
+int character_propose(const Context& ctx) {
+    const std::string synopsis = "gn character propose name=<name> [field=value...]";
+    if (!need_args(ctx, 1, synopsis)) return 2;
+    json parsed;
+    std::string error;
+    if (!parse_key_values(ctx.args, parsed, error)) {
+        std::cerr << error << " (" << synopsis << ")\n";
+        return 2;
+    }
+    // Every field is text: age=25 is "25", not a number.
+    json draft = json::object();
+    for (auto it = parsed.begin(); it != parsed.end(); ++it) {
+        if (std::find(kCharacterFields.begin(), kCharacterFields.end(), it.key()) == kCharacterFields.end()) {
+            std::cerr << "unknown field '" << it.key() << "'; the fields are " << join(kCharacterFields, ", ") << '\n';
+            return 2;
+        }
+        draft[it.key()] = it.value().is_string() ? it.value().get<std::string>() : it.value().dump();
+    }
+    if (!draft.contains("name") || draft["name"].get<std::string>().find_first_not_of(" \t") == std::string::npos) {
+        std::cerr << "name=... is required (" << synopsis << ")\n";
+        return 2;
+    }
+    std::string chat = chat_for(ctx);
+    if (chat.empty()) {
+        std::cerr << "the card goes into a chat's reply: --chat <id>, or $GN_SANDBOX_CHAT in the AI sandbox\n";
+        return 2;
+    }
+    if (!all_digits(chat)) {
+        std::cerr << "--chat (or $GN_SANDBOX_CHAT) must be a chat id, not '" << chat << "'\n";
+        return 2;
+    }
+    auto auth = authenticate(ctx);
+    if (!auth) return 1;
+    json r = auth->client.call("POST", "/api/v2/ai/chats/" + chat + "/character-proposals", auth->session(), &draft);
+    return print_result(ctx, r);
 }
 
 }  // namespace commands

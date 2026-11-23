@@ -194,12 +194,19 @@ gn memory list / read 12 / read-chat 7     # memories; chat ones need --chat <id
 gn web search "rust async traits" --limit 3
 gn web fetch https://example.com/a https://example.com/b
 gn web research "state of WebGPU in 2026"
+gn character propose name="Mira Vance" personality="dry, loyal"   # a review card in the AI's reply (sandbox)
 ```
 
 Results are what the model would read, often JSON: pipe them into `jq`. A CLI
 token needs `logs:read`, `memory:read` or `web:search` (web search spends the
 server's web-search budget). New read-only tools on the server show up in
 `gn tools` without a new release.
+
+`gn character propose` is the exception: it puts a character draft in front of the
+user as a review card, inside the reply the AI is generating in that chat (so it
+only works from the AI sandbox while a reply is running; the server answers 409
+otherwise). Nothing is created until the user accepts the card. A CLI token needs
+`character:propose`.
 
 ## Admin
 

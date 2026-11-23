@@ -49,7 +49,7 @@ std::string full_help() {
               << "  " << green("passkeys") << " ls|rm <id>  Your passkeys; registering one stays in the browser\n"
               << "  " << green("api-tokens") << " ls|create <name>|revoke <id>|models\n"
               << "                      OpenAI-compatible API keys (openAIAPI permission)\n\n"
-              << bold("AI tools") << " " << dim("(the AI's read-only tools; CLI tokens need logs:read, memory:read or web:search)") << "\n"
+              << bold("AI tools") << " " << dim("(the AI's tools; CLI tokens need logs:read, memory:read, web:search or character:propose)") << "\n"
               << "  " << green("tools") << " [name]        What you may run, or one tool's description and parameters\n"
               << "  " << green("tool") << " <name> [key=value...]\n"
               << "                      Run one; values are JSON when they parse (20, true, [\"a\"])\n"
@@ -59,7 +59,9 @@ std::string full_help() {
               << "  " << green("memory") << " list|read <id>|read-chat <id>\n"
               << "                      The AI's memories; chat ones need --chat <id> (or $GN_SANDBOX_CHAT)\n"
               << "  " << green("web") << " search <query>|fetch <url...>|research <query>\n"
-              << "                      Web search and page extraction (spends the web-search budget)\n\n"
+              << "                      Web search and page extraction (spends the web-search budget)\n"
+              << "  " << green("character") << " propose name=<name> [field=value...]\n"
+              << "                      A character draft as a review card in the AI's reply (sandbox; character:propose)\n\n"
               << bold("S3 storage") << " " << dim("(needs a login session and the s3 permission)") << "\n"
               << "  " << green("s3 ls") << " [provider [bucket [prefix]]]\n"
               << "                      Providers, a provider's buckets, or a folder's objects\n"
@@ -519,6 +521,7 @@ const std::vector<Group>& groups() {
         {{"memory", "memories"},
          {{{"list", "ls"}, memory_list}, {{"read", "show"}, memory_read}, {{"read-chat"}, memory_read_chat}}},
         {{"web"}, {{{"search"}, web_search}, {{"fetch", "get"}, web_fetch}, {{"research"}, web_research}}},
+        {{"character"}, {{{"propose", "draft"}, character_propose}}},
         {{"vault"},
          {{{"use"}, vault_use}, {{"ls", "list"}, vault_list}, {{"get", "open"}, vault_get}, {{"hide"}, vault_hide},
           {{"link", "share"}, vault_link}}},

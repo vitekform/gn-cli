@@ -189,6 +189,7 @@ int memory_read_chat(const Context& ctx);
 int web_search(const Context& ctx);
 int web_fetch(const Context& ctx);
 int web_research(const Context& ctx);
+int character_propose(const Context& ctx);
 int passkeys_list(const Context& ctx);
 int passkeys_remove(const Context& ctx);
 

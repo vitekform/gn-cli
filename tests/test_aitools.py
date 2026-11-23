@@ -61,6 +61,11 @@ class Server:
                 outer.calls.append(('POST', self.path, self.headers.get('X-CLI-Token'), body))
                 if body.get('where') == 'fail':
                     return self.reply(400, {'status': 400, 'message': "bad query near 'fail'"})
+                if self.path.endswith('/character-proposals'):
+                    if self.path == '/api/v2/ai/chats/9/character-proposals':
+                        return self.reply(409, {'status': 409, 'message': 'No reply is being generated in chat 9'})
+                    return self.reply(200, {'tool': 'propose_character',
+                                            'result': 'The draft of "%s" is on screen.' % body.get('name')})
                 name = self.path.split('/')[5]
                 self.reply(200, {'tool': name, 'result': json.dumps({'ran': name})})
 
@@ -138,6 +143,42 @@ class AiToolsTest(unittest.TestCase):
             ('/api/v2/ai/tools/research_web/run', {'query': 'what is up'}),
         ])
 
+    def test_character_propose_sends_a_text_draft_to_the_chat(self):
+        r = self.gn('character', 'propose', 'name=Mira Vance', 'age=34', 'personality=dry, loyal',
+                    'greeting="Took you long enough."', env_extra={'GN_SANDBOX_CHAT': '42'})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout, 'The draft of "Mira Vance" is on screen.\n')
+        self.assertEqual(self.posts(), [('/api/v2/ai/chats/42/character-proposals',
+                                         {'name': 'Mira Vance', 'age': '34', 'personality': 'dry, loyal',
+                                          'greeting': 'Took you long enough.'})])
+
+        r = self.gn('--json', '--chat', '43', 'character', 'draft', 'name=Bo')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(json.loads(r.stdout)['tool'], 'propose_character')
+        self.assertEqual(self.posts()[-1][0], '/api/v2/ai/chats/43/character-proposals')
+
+        # No reply running in that chat: the server's reason, and a failing status.
+        r = self.gn('--chat', '9', 'character', 'propose', 'name=Bo')
+        self.assertEqual(r.returncode, 1)
+        self.assertIn('No reply is being generated in chat 9', r.stdout + r.stderr)
+
+    def test_character_propose_refuses_bad_drafts_without_a_request(self):
+        before = len(self.server.calls)
+        chat = {'GN_SANDBOX_CHAT': '42'}
+        for argv, env, needle in (
+                (('character', 'propose'), chat, 'name='),
+                (('character', 'propose', 'title=Villain'), chat, 'name=... is required'),
+                (('character', 'propose', 'name=  '), chat, 'name=... is required'),
+                (('character', 'propose', 'name=Bo', 'hair=red'), chat, "unknown field 'hair'"),
+                (('character', 'propose', 'Bo'), chat, 'key=value'),
+                (('character', 'propose', 'name=Bo'), None, '$GN_SANDBOX_CHAT'),
+                (('--chat', 'x', 'character', 'propose', 'name=Bo'), None, 'chat id')):
+            with self.subTest(argv=argv):
+                r = self.gn(*argv, env_extra=env)
+                self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+                self.assertIn(needle, r.stdout + r.stderr)
+        self.assertEqual(len(self.server.calls), before)
+
     def test_errors_are_reported_without_a_request_where_possible(self):
         r = self.gn('logs', 'search', 'where=fail')
         self.assertEqual(r.returncode, 1)
@@ -172,7 +213,7 @@ class AiToolsTest(unittest.TestCase):
 
     def test_command_help_has_details_that_fit_the_sandbox(self):
         # The AI sandbox cuts output at 4,000 characters; a help page has to survive it whole.
-        for command in ('logs', 'memory', 'web', 'tools', 'tool', 'chat', 'files', 'me', 'credits'):
+        for command in ('logs', 'memory', 'web', 'tools', 'tool', 'chat', 'files', 'me', 'credits', 'character'):
             with self.subTest(command=command):
                 r = self.gn(command, '--help')
                 self.assertEqual(r.returncode, 0, r.stderr)

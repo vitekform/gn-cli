@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.1.0
+
+- `gn character propose name=<name> [field=value...]`: in the AI sandbox, the model drafts a
+  roleplay character and the user gets the same review card the chat's `propose_character`
+  tool puts up (accept, edit, ask for changes, dismiss). It creates nothing on its own, and works
+  only while the AI is answering in that chat (`--chat <id>` or `$GN_SANDBOX_CHAT`); otherwise
+  the server answers 409. Fields: name (required), title, age, gender, appearance, personality,
+  greeting, otherInfo; all sent as text.
+- CLI token scope for it: `character:propose` (needs the backend's
+  `/api/v2/ai/chats/{id}/character-proposals`).
+
 ## 2.0.0
 
 Breaking: the Stock system is gone, on the server and here.

@@ -87,6 +87,22 @@ const char* kWeb = R"HELP(Details
 Example
   gn web search "firecracker vsock" --limit 3 | jq -r '.results[] | "\(.title)  \(.url)"')HELP";
 
+const char* kCharacter = R"HELP(Details
+  Drafts a roleplay character and puts it in front of the user as a review card, inside the
+  reply being generated in this chat. They accept, edit, ask for changes or dismiss it; nothing
+  is created unless they accept. Works only while that reply is being generated (the AI
+  sandbox), otherwise the server answers 409. Output is one line of text.
+
+  gn character propose name=<name> [field=value...]
+      Fields, all text: name (required), title (a private label), age, gender, appearance,
+      personality, greeting (the opening line of a new chat), otherInfo. Fill in as many as
+      the conversation supports. At most 5 drafts per command.
+
+  gn character propose name="Mira Vance" age=34 personality="dry, loyal" greeting="Took you long enough."
+
+  The chat comes from --chat <id>, or $GN_SANDBOX_CHAT, which the AI sandbox sets. Don't repeat
+  the draft in prose afterwards: the card shows it. To revise, propose again with every field.)HELP";
+
 const char* kTools = R"HELP(Details
   The server's read-only AI tools, run directly: the same ones a chat calls, with the same
   permission checks.
@@ -138,6 +154,7 @@ const char* kAccount = R"HELP(Details
 const std::vector<std::pair<std::string, const char*>> kDetails = {
     {"logs", kLogs},  {"memory", kMemory}, {"web", kWeb},      {"tools", kTools},      {"tool", kTools},
     {"chat", kChat},  {"files", kFiles},   {"me", kAccount}, {"info", kAccount}, {"credits", kAccount},
+    {"character", kCharacter},
 };
 
 }  // namespace
