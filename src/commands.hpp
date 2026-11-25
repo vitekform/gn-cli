@@ -28,6 +28,7 @@ struct Context {
     std::string name;             // new-project / edit-project: --name
     std::string description;      // new-project / edit-project: --description
     bool set_public = false;      // new-project / edit-project: --public
+    bool set_unlisted = false;    // new-project / edit-project: --unlisted
     bool set_private = false;     // edit-project: --private
     std::string title;            // publish / edit: --title
     std::string changelog;        // publish / edit: --changelog <text>

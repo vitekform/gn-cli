@@ -118,8 +118,9 @@ std::string full_help() {
               << "  " << green("rsys yank") << " / " << green("unyank") << " <project> <version>\n"
               << "                      Hide a published release from the public, or bring it back\n"
               << "  " << green("rsys delete") << " <project> <version>  Delete a release and its files (-y to skip asking)\n"
-              << "  " << green("rsys new-project") << " <slug>        Create a project: --name, --description, --public\n"
-              << "  " << green("rsys edit-project") << " <slug>       Change --name, --description, --public/--private\n"
+              << "  " << green("rsys new-project") << " <slug>        Create a project: --name, --description, --public/--unlisted\n"
+              << "  " << green("rsys edit-project") << " <slug>       Change --name, --description, --public/--unlisted/--private\n"
+              << "                      Unlisted: public URLs and files for whoever has them, no download page\n"
               << "  " << green("rsys delete-project") << " <slug>     Delete it with every release (-y to skip asking)\n"
               << "  " << green("rsys hash") << " <file>...          SHA-256 of local files, like sha256sum\n\n"
               << bold("Temporary files") << " " << dim("(a public link that expires; get needs no login)") << "\n"
@@ -375,6 +376,7 @@ Invocation parse(const std::vector<std::string>& args, Invocation inv) {
         else if (value("--api-url", ctx.api_url)) {}
         else if (value("--rsys-url", ctx.rsys_url)) {}
         else if (a == "--public") ctx.set_public = true;
+        else if (a == "--unlisted") ctx.set_unlisted = true;
         else if (a == "--private") ctx.set_private = true;
         else if (a == "--prerelease") ctx.prerelease = true;
         else if (a == "--stable") ctx.stable = true;
@@ -600,7 +602,7 @@ constexpr OptionSpec kOptions[] = {
     {"--no-color", false}, {"--noninteractive", false}, {"--token", true}, {"--api-url", true}, {"--rsys-url", true},
     {"--email", true}, {"--password-stdin", false}, {"--scope", true}, {"--expires", true}, {"--recursive", false},
     {"--yes", false}, {"--force", false}, {"--output", true}, {"--part-size", true}, {"--content-type", true},
-    {"--name", true}, {"--description", true}, {"--public", false}, {"--private", false}, {"--title", true},
+    {"--name", true}, {"--description", true}, {"--public", false}, {"--unlisted", false}, {"--private", false}, {"--title", true},
     {"--changelog", true}, {"--changelog-file", true}, {"--prerelease", false}, {"--stable", false},
     {"--compat", true}, {"--variants-file", true}, {"--draft", false}, {"--append", false}, {"--primary", true}, {"--file", true}, {"--since", true},
     {"--ttl", true}, {"--max-downloads", true}, {"--zip", false}, {"--check", false}, {"--model", true},

@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.2.0
+
+- `rsys new-project` and `rsys edit-project` take `--unlisted`, next to `--public` and
+  `--private`: the project's public URLs and CDN file links work for anyone who knows the slug,
+  but it has no download page on the website. Needs a server with unlisted projects; an older
+  one would have read the request as public, so gn-cli sends no `isPublic` with `--unlisted`,
+  checks the answer, and fails (exit status 1) if the project didn't become unlisted. A
+  `new-project` refused that way is left private.
+- `rsys projects`, `rsys project` and the project summaries show public, unlisted or private.
+- More than one of `--public`, `--unlisted` and `--private` is a usage error (exit status 2)
+  before anything is sent; before, `new-project --public --private` made a public project.
+
 ## 2.1.0
 
 - `gn character propose name=<name> [field=value...]`: in the AI sandbox, the model drafts a

@@ -1085,10 +1085,57 @@ void print_changelog(const std::string& text) {
     }
 }
 
+std::string lowercase(std::string s) {
+    for (auto& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return s;
+}
+
+// PUBLIC, UNLISTED or PRIVATE. A server from before unlisted projects sends only isPublic.
+std::string project_visibility(const json& p) {
+    if (auto v = str(p, "visibility"); !v.empty()) return v;
+    return p.value("isPublic", false) ? "PUBLIC" : "PRIVATE";
+}
+
+// Lowercase and coloured, padded to `width` before colouring so columns line up.
+std::string visibility_label(const json& p, std::size_t width = 0) {
+    std::string v = project_visibility(p);
+    if (v == "PUBLIC") return term::green(pad_right("public", width));
+    if (v == "UNLISTED") return term::yellow(pad_right("unlisted", width));
+    return term::dim(pad_right("private", width));
+}
+
+// What --public / --unlisted / --private asked for, or "" for none. More than one is a usage error.
+std::optional<std::string> requested_visibility(const Context& ctx) {
+    int count = ctx.set_public + ctx.set_unlisted + ctx.set_private;
+    if (count > 1) {
+        term::error("Pick one of --public, --unlisted or --private.");
+        return std::nullopt;
+    }
+    return ctx.set_public ? "PUBLIC" : ctx.set_unlisted ? "UNLISTED" : ctx.set_private ? "PRIVATE" : "";
+}
+
+// Asks for a visibility in a project body. isPublic goes along for servers from before unlisted
+// projects, except for UNLISTED: an old server would read isPublic=true as public, with a
+// download page, so that one is sent alone and checked afterwards (check_visibility).
+void put_visibility(json& body, const std::string& visibility) {
+    if (visibility.empty()) return;
+    body["visibility"] = visibility;
+    if (visibility != "UNLISTED") body["isPublic"] = visibility == "PUBLIC";
+}
+
+// False, with an error, when the server answered with another visibility than asked for.
+bool check_visibility(const json& p, const std::string& wanted) {
+    if (wanted.empty() || project_visibility(p) == wanted) return true;
+    term::error("The server left " + str(p, "slug") + " " + term::bold(lowercase(project_visibility(p))) + ": it doesn't know "
+                + lowercase(wanted) + " projects yet. Update the server, or pick --public or --private.");
+    return false;
+}
+
 void print_project(const json& p) {
     term::section_begin(str(p, "name", str(p, "slug")));
     term::row("Slug", term::bold(str(p, "slug")));
-    term::row("Visibility", p.value("isPublic", false) ? term::green("public") : term::dim("private"));
+    term::row("Visibility", visibility_label(p));
+    if (project_visibility(p) == "UNLISTED") term::row("", term::dim("no download page; the public URLs and files work for anyone who has them"));
     if (auto d = str(p, "description"); !d.empty()) term::row("Description", d);
     term::row("Latest", str(p, "latestVersion", term::dim("nothing published")));
     term::row("Releases", str(p, "releaseCount", "0"));
@@ -1255,7 +1302,7 @@ int rsys_projects(const Context& ctx) {
     term::section_begin("Release projects (" + std::to_string(list.size()) + ")");
     if (list.empty()) term::row("", term::dim("none yet. Create one with: gn-cli rsys new-project <slug>"), 0);
     for (const auto& p : list) {
-        std::string vis = p.value("isPublic", false) ? term::green("public ") : term::dim("private");
+        std::string vis = visibility_label(p, 8);
         std::string latest = str(p, "latestVersion", none());
         std::cout << term::dim(G.vbar) << ' ' << term::bold(pad_right(truncate(str(p, "slug"), 24), 26)) << vis << "  "
                   << pad_right(truncate(latest, 16), 18) << term::dim(truncate(str(p, "name"), 30)) << '\n';
@@ -1281,40 +1328,46 @@ int rsys_project(const Context& ctx) {
 }
 
 int rsys_new_project(const Context& ctx) {
-    if (!rsys_usage(ctx, 1, "new-project <slug> [--name <name>] [--description <text>] [--public]")) return 2;
+    if (!rsys_usage(ctx, 1, "new-project <slug> [--name <name>] [--description <text>] [--public|--unlisted|--private]")) return 2;
+    auto visibility = requested_visibility(ctx);
+    if (!visibility) return 2;
     auto auth = rsys_authenticate(ctx);
     if (!auth) return 1;
-    json body = {{"slug", ctx.args[0]}, {"isPublic", ctx.set_public}};
+    json body = {{"slug", ctx.args[0]}, {"isPublic", false}};
+    put_visibility(body, *visibility);
     if (!ctx.name.empty()) body["name"] = ctx.name;
     if (!ctx.description.empty()) body["description"] = ctx.description;
     json p = auth->client.call("POST", kRsys + "/projects", auth->session(), &body);
+    if (!check_visibility(p, *visibility)) {
+        // An old server made it private (isPublic was left out), which is the safe side.
+        std::cerr << "  " << term::dim("It was created private; delete it with: gn-cli rsys delete-project " + str(p, "slug")) << '\n';
+        return 1;
+    }
     if (ctx.json) {
         std::cout << p.dump(2) << '\n';
         return 0;
     }
-    term::success("Created project " + term::bold(str(p, "slug")) + (ctx.set_public ? " (public)" : " (private)"));
+    term::success("Created project " + term::bold(str(p, "slug")) + " (" + lowercase(project_visibility(p)) + ")");
     if (auto u = str(p, "publicUrl"); !u.empty()) std::cout << "  " << term::dim("Latest will be at ") << term::cyan(u) << '\n';
     return 0;
 }
 
 int rsys_edit_project(const Context& ctx) {
-    if (!rsys_usage(ctx, 1, "edit-project <slug> [--name <name>] [--description <text>] [--public|--private]")) return 2;
-    if (ctx.set_public && ctx.set_private) {
-        term::error("--public or --private, not both.");
-        return 2;
-    }
+    if (!rsys_usage(ctx, 1, "edit-project <slug> [--name <name>] [--description <text>] [--public|--unlisted|--private]")) return 2;
+    auto visibility = requested_visibility(ctx);
+    if (!visibility) return 2;
     json body = json::object();
     if (!ctx.name.empty()) body["name"] = ctx.name;
     if (!ctx.description.empty()) body["description"] = ctx.description;
-    if (ctx.set_public) body["isPublic"] = true;
-    if (ctx.set_private) body["isPublic"] = false;
+    put_visibility(body, *visibility);
     if (body.empty()) {
-        term::error("Nothing to change: pass --name, --description, --public or --private.");
+        term::error("Nothing to change: pass --name, --description, --public, --unlisted or --private.");
         return 2;
     }
     auto auth = rsys_authenticate(ctx);
     if (!auth) return 1;
     json p = auth->client.call("PATCH", project_path(ctx.args[0]), auth->session(), &body);
+    if (!check_visibility(p, *visibility)) return 1;
     if (ctx.json) {
         std::cout << p.dump(2) << '\n';
         return 0;

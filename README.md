@@ -469,8 +469,15 @@ A CLI token needs `files:read` and `files:write`.
 ## Release system
 
 Projects and their released versions on https://rsys.ganamaga.me. Reading a
-public project (`latest`, `download`) needs no login at all; everything else
-needs the `release_system` permission (level 3, or a custom grant).
+public or unlisted project (`latest`, `download`) needs no login at all;
+everything else needs the `release_system` permission (level 3, or a custom
+grant).
+
+A project is `--public`, `--unlisted` or `--private` (the default). Unlisted
+works like public for anyone who knows the slug (the public URLs below, CDN
+file links, `latest` and `download` without a login) but has no download page
+on the website. Unlisted needs a server that knows it; against an older one
+gn-cli refuses rather than letting it become public.
 
 ```
 gn-cli rsys latest gn-cli                        # newest version, files, changelog
@@ -493,6 +500,7 @@ gn-cli rsys yank gn-cli 1.0.2                    # hide a broken release; unyank
 gn-cli rsys delete gn-cli 1.0.2 --yes            # gone, files and all
 
 gn-cli rsys new-project gn-cli --name "gn-cli" --description "The nextgen CLI" --public
+gn-cli rsys new-project internal-sdk --unlisted       # public files, no download page
 gn-cli rsys edit-project gn-cli --private
 gn-cli rsys delete-project gn-cli
 gn-cli rsys hash some-file                       # sha256, like sha256sum
@@ -585,7 +593,7 @@ A version is letters, digits, dots, dashes and underscores (`v1.2.0` is stored
 as `1.2.0`; no `+build` suffixes). A prerelease is never "latest" unless you
 ask with `--prerelease`.
 
-What the public sees, for a public project:
+What the public sees, for a public or unlisted project:
 
 | URL | |
 |---|---|

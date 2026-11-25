@@ -35,6 +35,8 @@ class State:
                          for name in ['plugin', 'private']}
         self.projects['general'] = dict(slug='general', isPublic=True, template=dict(revisionId=2, fields=[]))
         self.projects['legacy'] = dict(slug='legacy', isPublic=True)
+        # False plays a server from before unlisted projects: it ignores visibility, knows only isPublic.
+        self.knows_visibility = True
         self.releases = {}
         self.files = {}
         self.requests = []
@@ -81,6 +83,16 @@ class State:
             self.base + '/' + release['project'] + '/public/v/' + release['version'] + '/' + file['filename'])
         return dict(filename=file['filename'], size=file['size'], sha256=file['sha256'], contentType=file['contentType'], url=url)
 
+    def apply_visibility(self, project, body):
+        """Like ReleaseService: visibility wins; isPublic=true leaves an unlisted project unlisted."""
+        current = project.get('visibility', 'PUBLIC' if project.get('isPublic') else 'PRIVATE')
+        wanted = body.get('visibility', '').upper() if self.knows_visibility else ''
+        if not wanted and 'isPublic' in body:
+            wanted = current if body['isPublic'] and current == 'UNLISTED' else ('PUBLIC' if body['isPublic'] else 'PRIVATE')
+        wanted = wanted or current
+        project['isPublic'] = wanted != 'PRIVATE'
+        if self.knows_visibility: project['visibility'] = wanted
+
     def matches(self, project, query):
         selection = {key[2:]: value[0] for key, value in query.items() if key.startswith('f.')}
         found = []
@@ -108,16 +120,29 @@ class Handler(BaseHTTPRequestHandler):
         body = json.loads(raw) if raw and self.headers.get('content-type', '').startswith('application/json') else None
         s.requests.append((self.command, path, query, body, dict(self.headers)))
         if path.startswith('/api/') and self.headers.get('X-CLI-Token') != 'test-token': return self.respond(401, dict(message='No token'))
+        if path == '/api/v2/rsys/projects' and self.command == 'GET':
+            return self.respond(200, sorted(s.projects.values(), key=lambda p: p['slug']))
+        if path == '/api/v2/rsys/projects' and self.command == 'POST':
+            project = dict(slug=body['slug'], name=body.get('name') or body['slug'], isPublic=False)
+            s.apply_visibility(project, body)
+            s.projects[project['slug']] = project
+            return self.respond(200, project)
         project_match = re.fullmatch(r'/api/v2/rsys/projects/([^/]+)(?:/(.*))?', path)
         if project_match:
             name, rest = project_match.groups()
             project = s.projects.get(name)
             if not project: return self.respond(404, dict(message='No project'))
-            if not rest: return self.respond(200, project)
+            if not rest:
+                if self.command == 'PATCH':
+                    if 'name' in body: project['name'] = body['name']
+                    s.apply_visibility(project, body)
+                return self.respond(200, project)
             if rest in ['resolve', 'compatible-releases']:
                 found = s.matches(name, query)
                 return self.respond(200, found if rest == 'compatible-releases' else found[0]) if found else self.respond(404, dict(message='No compatible release'))
             if rest == 'latest': return self.legacy_latest(name)
+            if rest == 'releases' and self.command == 'GET':
+                return self.respond(200, [r['release'] for (p, _), r in s.releases.items() if p == name])
             if rest == 'releases' and self.command == 'POST':
                 version = re.sub(r'^v(?=\d)', '', body['version'])
                 record = s.add_release(name, version, project.get('template', {}).get('revisionId', 2), prerelease=body['prerelease'])
@@ -439,6 +464,43 @@ class RsysTests(unittest.TestCase):
     def test_old_server_accepts_flag_free_publish_but_rejects_compatibility(self):
         self.run_cli('rsys', 'publish', 'legacy', '1', self.local('legacy.zip'), *self.compatibility(), success=False)
         self.assertEqual([], self.writes())
+
+    def test_project_visibility_flags_send_visibility_and_isPublic_except_for_unlisted(self):
+        out = self.run_cli('rsys', 'new-project', 'tool', '--unlisted').stdout
+        self.assertIn('(unlisted)', out)
+        self.assertEqual(dict(slug='tool', isPublic=False, visibility='UNLISTED'), self.writes()[-1][3])
+        self.assertEqual('UNLISTED', self.state.projects['tool']['visibility'])
+        self.assertTrue(self.state.projects['tool']['isPublic'])
+
+        self.run_cli('rsys', 'edit-project', 'tool', '--public')
+        self.assertEqual(dict(visibility='PUBLIC', isPublic=True), self.writes()[-1][3])
+        self.run_cli('rsys', 'edit-project', 'tool', '--private')
+        self.assertEqual(dict(visibility='PRIVATE', isPublic=False), self.writes()[-1][3])
+        self.assertIn('unlisted', self.run_cli('rsys', 'edit-project', 'tool', '--unlisted').stdout)
+        self.assertEqual(dict(visibility='UNLISTED'), self.writes()[-1][3])
+
+        listing = self.run_cli('rsys', 'projects').stdout
+        self.assertRegex(listing, r'tool\s+unlisted')
+        self.assertIn('no download page', self.run_cli('rsys', 'project', 'tool').stdout)
+
+    def test_conflicting_visibility_flags_are_refused_before_any_request(self):
+        result = self.run_cli('rsys', 'edit-project', 'plugin', '--public', '--unlisted', success=False)
+        self.assertEqual(2, result.returncode)
+        self.assertIn('Pick one', result.stderr + result.stdout)
+        self.assertEqual([], self.writes())
+
+    def test_unlisted_on_an_old_server_fails_instead_of_going_public(self):
+        self.state.knows_visibility = False
+        result = self.run_cli('rsys', 'new-project', 'tool', '--unlisted', success=False)
+        self.assertIn("doesn't know unlisted", result.stderr + result.stdout)
+        self.assertFalse(self.state.projects['tool']['isPublic'])  # left private, the safe side
+        result = self.run_cli('rsys', 'edit-project', 'plugin', '--unlisted', success=False)
+        self.assertIn("doesn't know unlisted", result.stderr + result.stdout)
+        self.assertTrue(self.state.projects['plugin']['isPublic'])  # unchanged, not made public twice
+        # --public and --private still work there, through isPublic.
+        self.run_cli('rsys', 'edit-project', 'plugin', '--private')
+        self.assertFalse(self.state.projects['plugin']['isPublic'])
+        self.assertIn('private', self.run_cli('rsys', 'project', 'plugin').stdout)
 
     def test_checksum_mismatch_does_not_leave_a_corrupt_download(self):
         _, jar = self.seed_build()
