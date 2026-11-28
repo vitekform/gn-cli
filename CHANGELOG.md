@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.2.1
+
+- Attempt HTTP/3 (QUIC) on HTTPS requests when linked against a `libcurl` built with HTTP/3
+  support (`CURL_VERSION_HTTP3`), falling back automatically to HTTP/2 or HTTP/1.1 when the
+  server or network does not support QUIC, and log `HTTP/3` in `--debug` output.
+
 ## 2.2.0
 
 - `rsys new-project` and `rsys edit-project` take `--unlisted`, next to `--public` and

@@ -105,6 +105,23 @@ void debug_request(const char* method, const std::string& url, const Headers& he
                   << '\n';
 }
 
+#ifdef CURL_VERSION_HTTP3
+bool supports_http3() {
+    static const bool supported = [] {
+        const curl_version_info_data* info = curl_version_info(CURLVERSION_NOW);
+        return info != nullptr && (info->features & CURL_VERSION_HTTP3) != 0;
+    }();
+    return supported;
+}
+
+bool is_https_url(std::string_view url) {
+    if (url.size() < 8) return false;
+    return (url[0] == 'h' || url[0] == 'H') && (url[1] == 't' || url[1] == 'T') &&
+           (url[2] == 't' || url[2] == 'T') && (url[3] == 'p' || url[3] == 'P') &&
+           (url[4] == 's' || url[4] == 'S') && url[5] == ':' && url[6] == '/' && url[7] == '/';
+}
+#endif
+
 void debug_response(CURL* c, const Response& res, double seconds) {
     char* ip = nullptr;
     char* effective = nullptr;
@@ -112,8 +129,12 @@ void debug_response(CURL* c, const Response& res, double seconds) {
     curl_easy_getinfo(c, CURLINFO_PRIMARY_IP, &ip);
     curl_easy_getinfo(c, CURLINFO_EFFECTIVE_URL, &effective);
     curl_easy_getinfo(c, CURLINFO_HTTP_VERSION, &http_version);
-    const char* ver = http_version == CURL_HTTP_VERSION_2_0 ? "2" : http_version == CURL_HTTP_VERSION_1_1 ? "1.1"
-                    : http_version == CURL_HTTP_VERSION_1_0 ? "1.0" : "?";
+    const char* ver =
+#ifdef CURL_VERSION_HTTP3
+        http_version == CURL_HTTP_VERSION_3 ? "3" :
+#endif
+        http_version == CURL_HTTP_VERSION_2_0 ? "2" : http_version == CURL_HTTP_VERSION_1_1 ? "1.1"
+        : http_version == CURL_HTTP_VERSION_1_0 ? "1.0" : "?";
     std::cerr << "[debug] < HTTP/" << ver << ' ' << res.status << " from " << (ip ? ip : "?") << " in "
               << static_cast<long>(seconds * 1000) << " ms" << '\n';
     if (effective) std::cerr << "[debug] <   (final url: " << effective << ")\n";
@@ -185,6 +206,12 @@ Response perform(const char* method, const std::string& url, const Headers& head
     curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, opts.timeout_s > 0 && opts.timeout_s < 15 ? opts.timeout_s : 15L);
     curl_easy_setopt(c, CURLOPT_TIMEOUT, opts.timeout_s);
     curl_easy_setopt(c, CURLOPT_NOSIGNAL, 1L);
+#ifdef CURL_VERSION_HTTP3
+    // Attempt HTTP/3 over QUIC on HTTPS URLs when libcurl has HTTP/3 built in, falling back
+    // automatically to HTTP/2 or HTTP/1.1 if the server or network does not speak QUIC.
+    if (is_https_url(url) && supports_http3())
+        curl_easy_setopt(c, CURLOPT_HTTP_VERSION, static_cast<long>(CURL_HTTP_VERSION_3));
+#endif
     // Downloads are written as they come; let the server's own encoding through untouched.
     if (!opts.sink) curl_easy_setopt(c, CURLOPT_ACCEPT_ENCODING, "");
     if (opts.timeout_s == 0 && opts.stall_check) {
